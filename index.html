@@ -2348,7 +2348,7 @@
             };
         };
 
-        function BulkQuickView({ g, priceRules, courierRules, active, priceRulesState, setPriceRulesState }) {
+        function BulkQuickView({ g, priceRules, courierRules, active, priceRulesState, setPriceRulesState, currencyConversion, setCurrencyConversion }) {
             const [pricesText, setPricesText] = useState('');
             const [dimsText, setDimsText] = useState('');
             const [skusText, setSkusText] = useState('');
@@ -3587,10 +3587,7 @@
                                             <div className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center group-hover:bg-white/30 transition-colors">
                                                 <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                                             </div>
-                                            <span className="relative">
-                                                AI Upload
-                                                <div className="absolute -inset-1 bg-white/10 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 -z-10"></div>
-                                            </span>
+                                            <span>AI Upload</span>
                                         </div>
                                     </label>
                                     <input type="file" ref={fileInputRef} accept=".csv,.xlsx,.txt" onChange={handleFileUpload} className="hidden" />
@@ -3704,24 +3701,6 @@
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            {/* AI Upload Button - Enhanced */}
-                                            <label className="relative cursor-pointer group">
-                                                <input
-                                                    type="file"
-                                                    accept=".xlsx,.xls,.csv"
-                                                    onChange={(e) => handleAIUpload(e.target.files[0])}
-                                                    className="hidden"
-                                                />
-                                                <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-violet-500 to-indigo-600 hover:from-violet-600 hover:to-indigo-700 text-white text-sm font-bold rounded-lg shadow-lg shadow-indigo-500/30 transition-all duration-200 group-hover:scale-105 group-hover:shadow-xl group-hover:shadow-indigo-500/40 group-active:scale-95 border border-indigo-400/20">
-                                                    <div className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center group-hover:bg-white/30 transition-colors">
-                                                        <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                                                    </div>
-                                                    <span className="relative">
-                                                        AI Upload
-                                                        <div className="absolute -inset-1 bg-white/10 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 -z-10"></div>
-                                                    </span>
-                                                </div>
-                                            </label>
                                             <div className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-xs font-bold rounded-lg">
                                                 {rows.length || 0} items
                                             </div>
@@ -4501,7 +4480,7 @@
                     </div>
 
                     <SimpleView g={g} setG={setG} priceRules={priceRules} setPriceRules={setPriceRules} courierRules={courierRules} active={tab === 'simple'} setSettingsOpen={setSettingsOpen} />
-                    <BulkQuickView g={g} priceRules={priceRules} courierRules={courierRules} active={tab === 'bulkQuick'} priceRulesState={priceRules} setPriceRulesState={setPriceRules} />
+                    <BulkQuickView g={g} priceRules={priceRules} courierRules={courierRules} active={tab === 'bulkQuick'} priceRulesState={priceRules} setPriceRulesState={setPriceRules} currencyConversion={currencyConversion} setCurrencyConversion={setCurrencyConversion} />
 
                     <button onClick={() => setSettingsOpen(true)} className="hidden md:flex fixed bottom-8 right-8 z-[60] btn px-5 py-3 rounded-full bg-gradient-to-br from-white/90 to-gray-100/80 dark:from-gray-800/90 dark:to-gray-900/80 backdrop-blur-2xl border border-white/60 dark:border-gray-600/40 text-indigo-600 dark:text-white shadow-[0_8px_32px_rgba(0,0,0,0.08),inset_0_1px_1px_rgba(255,255,255,0.8)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.05)] hover:scale-105 hover:shadow-[0_12px_40px_rgba(99,102,241,0.15),inset_0_1px_1px_rgba(255,255,255,0.8)] dark:hover:shadow-[0_12px_40px_rgba(99,102,241,0.25),inset_0_1px_1px_rgba(255,255,255,0.08)] transition-all items-center gap-3 group">
                         <span className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-900/50 flex items-center justify-center group-hover:rotate-90 transition-transform duration-500">
