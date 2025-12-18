@@ -78,6 +78,7 @@ INTELLIGENT ANALYSIS INSTRUCTIONS:
    - Could be labeled as "size", "dimensions", "L×W×H", "carton size", etc.
    - **CRITICAL**: If you see "CARTON SIZE" followed by empty header columns, those are likely L, W, H dimensions
    - Look for 3 consecutive columns with numeric data that could be dimensions
+   - **SPECIFIC PATTERN**: "CARTON SIZE" in column 8, empty headers in columns 9-10, "CBM" in column 11, "G.W" in column 12
 7. **Pack Quantity**: Numbers followed by "PC", "PCS", "SET", "PACK" or in "PACKING" columns
 8. **Weight**: Values with "kg", "g", "lb", "G.W", "GROSS WEIGHT" or in weight-appropriate ranges
 9. **Volume**: CBM, m³, cubic measurements - often in columns labeled "CBM"
@@ -92,10 +93,17 @@ SMART MAPPING RULES:
 - Prioritize carton dimensions over product dimensions for shipping
 - Look for data consistency patterns across rows
 - Consider column position context (SKUs often first, prices often early, dimensions grouped)
-- **CARTON DIMENSION DETECTION**: If "CARTON SIZE" is followed by 2-3 empty/unnamed columns with numeric data, map them as cartonLength, cartonWidth, cartonHeight
+- **CARTON DIMENSION DETECTION**: 
+  * If "CARTON SIZE" contains combined dimensions (e.g., "56X10X127CM"), map cartonLength/Width/Height to that column
+  * If "CARTON SIZE" is followed by empty columns with numeric data, map: cartonLength=col8, cartonWidth=col9, cartonHeight=col10
 - **WEIGHT MAPPING**: "G.W" = grossWeight, look for numeric values in appropriate range (1-200kg typically)
-- **CBM MAPPING**: "CBM" columns contain volume data, usually decimal values (0.001-1.000 range)
+- **CBM MAPPING**: "CBM" columns contain volume data, usually decimal values (0.001-1.000 range)  
 - **PACK MAPPING**: "PACKING" columns contain quantity info, look for "PC", "SET", numbers
+- **SPECIFIC TO THIS DATA**: Column 8="CARTON SIZE", Col 9&10=dimensions, Col 11="CBM", Col 12="G.W", Col 5="PACKING"
+
+EXAMPLE ANALYSIS:
+If you see headers like: ["IMAGE", "TIEM NO.", "DESCRIPTION", "SIZE", "MATERIAL", "PACKING", "FOB USD", "PORT", "CARTON SIZE", "", "", "CBM", "G.W", "FEST REMARK", ""]
+Map as: sku=1, title=2, price=6, productLength=3, pack=5, cartonLength=8, cartonWidth=9, cartonHeight=10, supplierCBM=11, grossWeight=12
 
 Return ONLY this JSON format (no extra text):
 {
