@@ -384,12 +384,14 @@ function extractProducts(sheetData, mapping, headerRow) {
     if (cartonLengthCol != null) {
       const dimStr = String(row[cartonLengthCol] || "");
       const dims = dimStr.match(/[\d.]+/g);
+      console.log(`Carton dimension parsing: "${dimStr}" -> [${dims?.join(', ') || 'no matches'}]`);
       if (dims && dims.length >= 3) {
         product.cartonLength = parseFloat(dims[0]) || 0;
         product.cartonWidth = parseFloat(dims[1]) || 0;
         product.cartonHeight = parseFloat(dims[2]) || 0;
         product.cartonSource = mapping.cartonLength.name || "";
         combinedDimensionsFound = true;
+        console.log(`Combined dimensions found: ${product.cartonLength}×${product.cartonWidth}×${product.cartonHeight}`);
       } else {
         // Single dimension value
         product.cartonLength = parseFloat(dimStr.replace(/[^0-9.-]/g, "")) || 0;
@@ -427,18 +429,22 @@ function extractProducts(sheetData, mapping, headerRow) {
 
       // INTELLIGENT PACK PARSING
       const packRaw = packStr.toUpperCase();
+      console.log(`Pack parsing: "${packStr}" -> "${packRaw}"`);
 
       // Extract number followed by PC, PCS, SET, etc.
       const match = packRaw.match(/(\d+)\s*(PC|PCS|SET|PACK|PIECE)/);
       if (match && match[1]) {
         product.pack = parseInt(match[1]);
+        console.log(`Pack regex match: ${match[1]} -> ${product.pack}`);
       } else {
         // Fallback: extract any number from the string
         const numberMatch = packStr.match(/\d+/);
         if (numberMatch) {
           product.pack = parseInt(numberMatch[0]);
+          console.log(`Pack fallback: ${numberMatch[0]} -> ${product.pack}`);
         } else {
           product.pack = 1; // Default
+          console.log(`Pack default: 1`);
         }
       }
     }
