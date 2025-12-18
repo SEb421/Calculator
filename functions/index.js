@@ -15,6 +15,7 @@
 const { onRequest } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const XLSX = require("xlsx");
+const ExcelJS = require("exceljs");
 
 // Initialize admin if not already done
 if (!admin.apps.length) {
@@ -27,6 +28,105 @@ const MAPPING_FIELDS = [
   "cartonLength", "cartonWidth", "cartonHeight", "dims_text", "pack",
   "totalCartons", "grossWeight", "netWeight", "supplierCBM"
 ];
+
+/**
+ * Extract images from Excel file using ExcelJS
+ * Returns array of image data with row associations
+ */
+async function extractImagesFromExcel(xlsxBuffer) {
+  console.log("🖼️  Starting image extraction with ExcelJS...");
+  
+  try {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(xlsxBuffer);
+    
+    const worksheet = workbook.getWorksheet(1); // First worksheet
+    const images = [];
+    
+    // Extract images from worksheet
+    if (worksheet.getImages) {
+      const worksheetImages = worksheet.getImages();
+      console.log(`Found ${worksheetImages.length} images in worksheet`);
+      
+      worksheetImages.forEach((image, index) => {
+        try {
+          const imageData = workbook.model.media[image.imageId];
+          if (imageData) {
+            // Convert image to base64 data URL
+            const base64 = imageData.buffer.toString('base64');
+            const mimeType = imageData.extension === 'png' ? 'image/png' : 
+                           imageData.extension === 'jpg' || imageData.extension === 'jpeg' ? 'image/jpeg' :
+                           imageData.extension === 'gif' ? 'image/gif' : 'image/png';
+            
+            const dataUrl = `data:${mimeType};base64,${base64}`;
+            
+            // Try to associate image with row based on position
+            let associatedRow = null;
+            if (image.range) {
+              // If image has range information, use it
+              associatedRow = image.range.tl.row + 1; // Convert to 1-based indexing
+            } else {
+              // Fallback: estimate row based on image index
+              associatedRow = index + 2; // Start from row 2 (after header)
+            }
+            
+            images.push({
+              index: index,
+              row: associatedRow,
+              dataUrl: dataUrl,
+              size: imageData.buffer.length,
+              type: mimeType,
+              extension: imageData.extension
+            });
+            
+            console.log(`Extracted image ${index + 1}: ${mimeType}, ${imageData.buffer.length} bytes, row ${associatedRow}`);
+          }
+        } catch (err) {
+          console.warn(`Failed to extract image ${index}:`, err.message);
+        }
+      });
+    }
+    
+    // Alternative: Check for embedded media in workbook
+    if (workbook.model && workbook.model.media) {
+      console.log(`Found ${workbook.model.media.length} media items in workbook`);
+      
+      // If no images found via worksheet, try to extract all media
+      if (images.length === 0) {
+        workbook.model.media.forEach((media, index) => {
+          try {
+            const base64 = media.buffer.toString('base64');
+            const mimeType = media.extension === 'png' ? 'image/png' : 
+                           media.extension === 'jpg' || media.extension === 'jpeg' ? 'image/jpeg' :
+                           media.extension === 'gif' ? 'image/gif' : 'image/png';
+            
+            const dataUrl = `data:${mimeType};base64,${base64}`;
+            
+            images.push({
+              index: index,
+              row: index + 2, // Estimate row
+              dataUrl: dataUrl,
+              size: media.buffer.length,
+              type: mimeType,
+              extension: media.extension
+            });
+            
+            console.log(`Extracted media ${index + 1}: ${mimeType}, ${media.buffer.length} bytes`);
+          } catch (err) {
+            console.warn(`Failed to extract media ${index}:`, err.message);
+          }
+        });
+      }
+    }
+    
+    console.log(`✅ Image extraction complete: ${images.length} images extracted`);
+    return images;
+    
+  } catch (error) {
+    console.error("❌ Image extraction failed:", error.message);
+    return [];
+  }
+}
 
 /**
  * Extract text content from XLSX workbook for AI analysis
@@ -242,7 +342,7 @@ function parseAIResponse(responseText) {
 /**
  * Extract product data based on AI mapping
  */
-function extractProducts(sheetData, mapping, headerRow) {
+function extractProducts(sheetData, mapping, headerRow, extractedImages = []) {
   console.log(`Extracting products starting at row ${headerRow + 1}`);
   console.log(`Extracting products starting at row ${headerRow + 1}`);
   const dataRows = sheetData.data.slice(headerRow + 1);
@@ -284,8 +384,28 @@ function extractProducts(sheetData, mapping, headerRow) {
       supplierCBM: null,
       cbmSource: "",
       // Fallback dims text
-      dims_text: ""
+      dims_text: "",
+      // Image data
+      image: null,
+      imageUrl: null
     };
+
+    // Associate image with product row
+    const currentRow = headerRow + 1 + i + 1; // Convert to 1-based Excel row
+    const associatedImage = extractedImages.find(img => 
+      Math.abs(img.row - currentRow) <= 1 // Allow 1 row tolerance for positioning
+    );
+    
+    if (associatedImage) {
+      product.image = associatedImage.dataUrl;
+      product.imageUrl = associatedImage.dataUrl;
+      console.log(`🖼️  Associated image with product ${i + 1} (row ${currentRow})`);
+    } else if (extractedImages.length > 0 && i < extractedImages.length) {
+      // Fallback: assign images sequentially if row association fails
+      product.image = extractedImages[i].dataUrl;
+      product.imageUrl = extractedImages[i].dataUrl;
+      console.log(`🖼️  Sequential image assignment for product ${i + 1}`);
+    }
 
     // Extract SKU with intelligent fallback (safe null check)
     const skuCol = mapping?.sku?.col;
@@ -527,6 +647,7 @@ exports.analyzeQuoteSheetV2 = onRequest(
     try {
       const { rows, xlsxBase64, preview } = req.body;
       let sheetData;
+      let extractedImages = [];
 
       if (rows && Array.isArray(rows)) {
         console.log("Using provided rows (Lightweight JSON mode)");
@@ -537,9 +658,26 @@ exports.analyzeQuoteSheetV2 = onRequest(
           rowCount: rows.length,
           colCount: rows[0]?.length || 0
         };
+        
+        // For rows mode, we don't have the original Excel file for image extraction
+        console.log("⚠️  Rows mode: No image extraction possible without original Excel file");
+        
       } else if (xlsxBase64) {
-        console.log("Parsing XLSX file (Legacy Base64 mode)...");
+        console.log("Parsing XLSX file (Full Excel mode with image extraction)...");
+        
+        // Extract text data using XLSX
         sheetData = extractSheetData(xlsxBase64);
+        
+        // Extract images using ExcelJS
+        try {
+          const xlsxBuffer = Buffer.from(xlsxBase64, 'base64');
+          extractedImages = await extractImagesFromExcel(xlsxBuffer);
+          console.log(`🖼️  Extracted ${extractedImages.length} images from Excel file`);
+        } catch (imageError) {
+          console.warn("⚠️  Image extraction failed, continuing without images:", imageError.message);
+          extractedImages = [];
+        }
+        
       } else {
         res.status(400).json({ error: "Missing rows or xlsxBase64 in request body" });
         return;
@@ -806,7 +944,7 @@ OUTPUT REQUIREMENTS:
       // 5. Extract products based on mapping
       // FAILSAFE: Clamp headerRow to reasonable start
       const safeHeaderRow = (aiMapping.headerRow > 20) ? 0 : aiMapping.headerRow;
-      const products = extractProducts(sheetData, aiMapping.mapping, safeHeaderRow);
+      const products = extractProducts(sheetData, aiMapping.mapping, safeHeaderRow, extractedImages);
       console.log(`Extracted ${products.length} products`);
 
       res.json({
