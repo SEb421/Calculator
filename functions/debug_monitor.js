@@ -2,11 +2,15 @@
  * SUPER EXPLICIT DEBUG MONITOR
  * This script logs every character of the URL construction to find the 404.
  */
-const functions = require("firebase-functions");
-const axios = require("axios"); // Ensure 'axios' is in your package.json
-const { GoogleAuth } = require("google-auth-library");
+const { onRequest } = require("firebase-functions/v2/https");
+const admin = require("firebase-admin");
 
-exports.monitorAICall = functions.https.onRequest(async (req, res) => {
+// Initialize admin if not already done
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
+
+exports.monitorAICall = onRequest({ cors: true }, async (req, res) => {
     console.log("=== [DEBUG START] ===");
     
     // --- STEP 1: CAPTURE VARIABLES ---
@@ -43,34 +47,37 @@ exports.monitorAICall = functions.https.onRequest(async (req, res) => {
     try {
         // --- STEP 3: AUTHENTICATION ---
         console.log("[3] Fetching Google Auth Token...");
-        const auth = new GoogleAuth({
-            scopes: 'https://www.googleapis.com/auth/cloud-platform'
-        });
-        const client = await auth.getClient();
-        const headers = await client.getRequestHeaders();
-        console.log("[3] Token Header Acquired.");
+        const token = await admin.credential.applicationDefault().getAccessToken();
+        const accessToken = token.access_token;
+        console.log("[3] Token Acquired.");
 
         // --- STEP 4: THE CALL ---
         console.log("[4] Sending Request to Google...");
-        const response = await axios.post(finalUrl, req.body, {
-            headers: { ...headers, "Content-Type": "application/json" },
-            validateStatus: (status) => true // Don't crash on 404, we want to see it
+        const response = await fetch(finalUrl, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${accessToken}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(req.body)
         });
 
         // --- STEP 5: FINAL ANALYSIS ---
         console.log(`[5] GOOGLE RESPONSE STATUS: ${response.status} ${response.statusText}`);
         
+        const responseData = await response.json().catch(() => ({}));
+        
         if (response.status === 404) {
             console.error("--- 404 DATA DUMP ---");
             console.error("This URL does not exist on Google's servers.");
-            console.error("Full Error Body:", JSON.stringify(response.data, null, 2));
+            console.error("Full Error Body:", JSON.stringify(responseData, null, 2));
         }
 
         res.status(response.status).json({
             debug: {
                 url_attempted: finalUrl,
                 google_status: response.status,
-                google_message: response.data
+                google_message: responseData
             }
         });
 

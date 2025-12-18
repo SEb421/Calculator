@@ -5,7 +5,7 @@
  * Analyzes supplier quote spreadsheets using Gemini Pro AI to extract
  * pricing data, dimensions, and product information from varied formats.
  */
-exports.debug = require('./debug_monitor').monitorAICall;
+exports.monitorAICall = require('./debug_monitor').monitorAICall;
 
 const { onRequest } = require("firebase-functions/v2/https");
 const { VertexAI } = require("@google-cloud/vertexai");
@@ -13,6 +13,44 @@ const admin = require("firebase-admin");
 const XLSX = require("xlsx");
 
 admin.initializeApp();
+
+// JSON Schema for structured output
+const MAPPING_FIELDS = [
+  "sku", "price", "productLength", "productWidth", "productHeight",
+  "cartonLength", "cartonWidth", "cartonHeight", "dims_text", "pack",
+  "totalCartons", "grossWeight", "netWeight", "supplierCBM"
+];
+
+const RESPONSE_SCHEMA = {
+  type: "OBJECT",
+  additionalProperties: false,
+  required: ["headerRow", "mapping", "confidence", "notes"],
+  properties: {
+    headerRow: { type: "INTEGER" },
+    mapping: {
+      type: "OBJECT",
+      additionalProperties: false,
+      required: MAPPING_FIELDS,
+      properties: Object.fromEntries(
+        MAPPING_FIELDS.map((k) => [k, { "$ref": "#/definitions/FieldMapping" }])
+      ),
+    },
+    confidence: { type: "NUMBER", nullable: true },
+    notes: { type: "STRING", nullable: true },
+  },
+  definitions: {
+    FieldMapping: {
+      type: "OBJECT",
+      additionalProperties: false,
+      required: ["col", "name", "unit"],
+      properties: {
+        col: { type: "INTEGER", nullable: true },
+        name: { type: "STRING", nullable: true },
+        unit: { type: "STRING", nullable: true },
+      },
+    },
+  },
+};
 
 /**
  * Extract text content from XLSX workbook for AI analysis
@@ -131,7 +169,12 @@ function parseAIResponse(responseText) {
   try {
     return JSON.parse(jsonStr);
   } catch (e) {
-    // Log first 500 chars for debugging
+    // Enhanced error logging with position context
+    const m = e.message.match(/position (\d+)/);
+    if (m) {
+      const pos = Number(m[1]);
+      console.error("Malformed JSON around pos", pos, jsonStr.slice(Math.max(0, pos - 80), pos + 80));
+    }
     console.error("Malformed JSON (first 500 chars):", jsonStr.substring(0, 500));
     throw new Error("AI returned malformed JSON: " + e.message);
   }
@@ -184,21 +227,23 @@ function extractProducts(sheetData, mapping, headerRow) {
       dims_text: ""
     };
 
-    // Extract SKU
-    if (mapping.sku?.col !== null) {
-      product.sku = String(row[mapping.sku.col] || "").trim();
+    // Extract SKU (safe null check)
+    const skuCol = mapping?.sku?.col;
+    if (skuCol != null) {
+      product.sku = String(row[skuCol] || "").trim();
     }
 
-    // Extract price
-    if (mapping.price?.col !== null) {
-      const priceStr = String(row[mapping.price.col] || "");
+    // Extract price (safe null check)
+    const priceCol = mapping?.price?.col;
+    if (priceCol != null) {
+      const priceStr = String(row[priceCol] || "");
       product.unitPrice = parseFloat(priceStr.replace(/[^0-9.-]/g, "")) || 0;
     }
 
-    // Extract PRODUCT dimensions (reference)
-    if (mapping.productLength?.col !== null) {
-      const col = mapping.productLength.col;
-      const dimStr = String(row[col] || "");
+    // Extract PRODUCT dimensions (reference) - safe null checks
+    const productLengthCol = mapping?.productLength?.col;
+    if (productLengthCol != null) {
+      const dimStr = String(row[productLengthCol] || "");
       const dims = dimStr.match(/[\d.]+/g);
       if (dims && dims.length >= 3) {
         product.productLength = parseFloat(dims[0]) || 0;
@@ -206,16 +251,19 @@ function extractProducts(sheetData, mapping, headerRow) {
         product.productHeight = parseFloat(dims[2]) || 0;
         product.productSource = mapping.productLength.name || "";
       } else {
-        product.productLength = mapping.productLength.col !== null ? parseFloat(String(row[mapping.productLength.col]).replace(/[^0-9.-]/g, "")) || 0 : 0;
-        product.productWidth = mapping.productWidth?.col !== null ? parseFloat(String(row[mapping.productWidth.col]).replace(/[^0-9.-]/g, "")) || 0 : 0;
-        product.productHeight = mapping.productHeight?.col !== null ? parseFloat(String(row[mapping.productHeight.col]).replace(/[^0-9.-]/g, "")) || 0 : 0;
+        const productWidthCol = mapping?.productWidth?.col;
+        const productHeightCol = mapping?.productHeight?.col;
+        
+        product.productLength = productLengthCol != null ? parseFloat(String(row[productLengthCol]).replace(/[^0-9.-]/g, "")) || 0 : 0;
+        product.productWidth = productWidthCol != null ? parseFloat(String(row[productWidthCol]).replace(/[^0-9.-]/g, "")) || 0 : 0;
+        product.productHeight = productHeightCol != null ? parseFloat(String(row[productHeightCol]).replace(/[^0-9.-]/g, "")) || 0 : 0;
       }
     }
 
-    // Extract CARTON dimensions (freight - PRIORITY)
-    if (mapping.cartonLength?.col !== null) {
-      const col = mapping.cartonLength.col;
-      const dimStr = String(row[col] || "");
+    // Extract CARTON dimensions (freight - PRIORITY) - safe null checks
+    const cartonLengthCol = mapping?.cartonLength?.col;
+    if (cartonLengthCol != null) {
+      const dimStr = String(row[cartonLengthCol] || "");
       const dims = dimStr.match(/[\d.]+/g);
       if (dims && dims.length >= 3) {
         product.cartonLength = parseFloat(dims[0]) || 0;
@@ -223,20 +271,25 @@ function extractProducts(sheetData, mapping, headerRow) {
         product.cartonHeight = parseFloat(dims[2]) || 0;
         product.cartonSource = mapping.cartonLength.name || "";
       } else {
-        product.cartonLength = mapping.cartonLength.col !== null ? parseFloat(String(row[mapping.cartonLength.col]).replace(/[^0-9.-]/g, "")) || 0 : 0;
-        product.cartonWidth = mapping.cartonWidth?.col !== null ? parseFloat(String(row[mapping.cartonWidth.col]).replace(/[^0-9.-]/g, "")) || 0 : 0;
-        product.cartonHeight = mapping.cartonHeight?.col !== null ? parseFloat(String(row[mapping.cartonHeight.col]).replace(/[^0-9.-]/g, "")) || 0 : 0;
+        const cartonWidthCol = mapping?.cartonWidth?.col;
+        const cartonHeightCol = mapping?.cartonHeight?.col;
+        
+        product.cartonLength = cartonLengthCol != null ? parseFloat(String(row[cartonLengthCol]).replace(/[^0-9.-]/g, "")) || 0 : 0;
+        product.cartonWidth = cartonWidthCol != null ? parseFloat(String(row[cartonWidthCol]).replace(/[^0-9.-]/g, "")) || 0 : 0;
+        product.cartonHeight = cartonHeightCol != null ? parseFloat(String(row[cartonHeightCol]).replace(/[^0-9.-]/g, "")) || 0 : 0;
       }
     }
 
-    // Dims text fallback
-    if (mapping.dims_text?.col !== null) {
-      product.dims_text = String(row[mapping.dims_text.col] || "");
+    // Dims text fallback (safe null check)
+    const dimsTextCol = mapping?.dims_text?.col;
+    if (dimsTextCol != null) {
+      product.dims_text = String(row[dimsTextCol] || "");
     }
 
-    // Extract pack
-    if (mapping.pack?.col !== null) {
-      const packStr = String(row[mapping.pack.col] || "");
+    // Extract pack (safe null check)
+    const packCol = mapping?.pack?.col;
+    if (packCol != null) {
+      const packStr = String(row[packCol] || "");
       product.pack_text = packStr;
 
       // INTELLIGENT PACK PARSING (same as frontend)
@@ -258,26 +311,30 @@ function extractProducts(sheetData, mapping, headerRow) {
       }
     }
 
-    // Extract total cartons (for split packing)
-    if (mapping.totalCartons?.col !== null) {
-      product.totalCartons = parseInt(String(row[mapping.totalCartons.col]).replace(/[^0-9]/g, "")) || null;
+    // Extract total cartons (for split packing) - safe null check
+    const totalCartonsCol = mapping?.totalCartons?.col;
+    if (totalCartonsCol != null) {
+      product.totalCartons = parseInt(String(row[totalCartonsCol]).replace(/[^0-9]/g, "")) || null;
     }
 
-    // Extract weight
-    if (mapping.grossWeight?.col !== null) {
-      const weightStr = String(row[mapping.grossWeight.col] || "");
+    // Extract weight (safe null checks)
+    const grossWeightCol = mapping?.grossWeight?.col;
+    if (grossWeightCol != null) {
+      const weightStr = String(row[grossWeightCol] || "");
       product.grossWeight = parseFloat(weightStr.replace(/[^0-9.-]/g, "")) || 0;
       product.weightUnit = mapping.grossWeight.unit || "kg";
     }
 
-    if (mapping.netWeight?.col !== null) {
-      const weightStr = String(row[mapping.netWeight.col] || "");
+    const netWeightCol = mapping?.netWeight?.col;
+    if (netWeightCol != null) {
+      const weightStr = String(row[netWeightCol] || "");
       product.netWeight = parseFloat(weightStr.replace(/[^0-9.-]/g, "")) || null;
     }
 
-    // Extract supplier CBM
-    if (mapping.supplierCBM?.col !== null) {
-      const cbmStr = String(row[mapping.supplierCBM.col] || "");
+    // Extract supplier CBM (safe null check)
+    const supplierCBMCol = mapping?.supplierCBM?.col;
+    if (supplierCBMCol != null) {
+      const cbmStr = String(row[supplierCBMCol] || "");
       product.supplierCBM = parseFloat(cbmStr.replace(/[^0-9.-]/g, "")) || null;
       product.cbmSource = mapping.supplierCBM.name || "";
     }
@@ -353,9 +410,11 @@ exports.analyzeQuoteSheetV2 = onRequest(
           parts: [{ text: prompt }]
         }],
         generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: RESPONSE_SCHEMA,
           temperature: 0.2,
           topP: 0.8,
-          maxOutputTokens: 8192
+          maxOutputTokens: 2048
         }
       };
 
