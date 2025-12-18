@@ -12,7 +12,10 @@ const { VertexAI } = require("@google-cloud/vertexai");
 const admin = require("firebase-admin");
 const XLSX = require("xlsx");
 
-admin.initializeApp();
+// Initialize admin if not already done
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
 
 // JSON Schema for structured output
 const MAPPING_FIELDS = [
