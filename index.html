@@ -4092,7 +4092,7 @@
                                                                     <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 uppercase">GBP</th>
                                                                     <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 uppercase">L×W×H</th>
                                                                     <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 uppercase">Pack</th>
-                                                                    <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 uppercase">Pack</th>
+                                                                    <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 uppercase">Weight</th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -4118,6 +4118,7 @@
                                                                             </td>
                                                                             <td className="px-3 py-2 text-gray-500">{p.cartonLength || p.productLength || 0}×{p.cartonWidth || p.productWidth || 0}×{p.cartonHeight || p.productHeight || 0}</td>
                                                                             <td className="px-3 py-2 text-gray-500">{p.pack || 1}</td>
+                                                                            <td className="px-3 py-2 text-gray-500">{p.grossWeight ? `${p.grossWeight}kg` : '—'}</td>
                                                                         </tr>
                                                                     );
                                                                 })}
