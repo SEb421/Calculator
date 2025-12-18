@@ -102,30 +102,32 @@ SMART ANALYSIS:
 3. Use probability to resolve ambiguous mappings
 4. Consider supplier naming conventions
 
-OUTPUT: Return ONLY valid JSON with confidence scoring:
+OUTPUT: Return ONLY valid JSON in this exact format:
 
 {
   "headerRow": 0,
   "mapping": {
-    "sku": {"col": 1, "name": "Item Code", "unit": null, "confidence": 0.95, "pattern": "PSP prefix detected"},
-    "title": {"col": 2, "name": "Description", "unit": null, "confidence": 0.90, "pattern": "longest text field"},
-    "price": {"col": 10, "name": "FOB USD", "unit": "USD", "confidence": 0.85, "pattern": "currency symbol found"},
-    "productLength": {"col": null, "name": null, "unit": null, "confidence": 0.0, "pattern": "not found"},
-    "productWidth": {"col": null, "name": null, "unit": null, "confidence": 0.0, "pattern": "not found"},
-    "productHeight": {"col": null, "name": null, "unit": null, "confidence": 0.0, "pattern": "not found"},
-    "cartonLength": {"col": 7, "name": "Carton L", "unit": "cm", "confidence": 0.80, "pattern": "dimension with cm unit"},
-    "cartonWidth": {"col": 8, "name": "Carton W", "unit": "cm", "confidence": 0.80, "pattern": "dimension with cm unit"},
-    "cartonHeight": {"col": 9, "name": "Carton H", "unit": "cm", "confidence": 0.80, "pattern": "dimension with cm unit"},
-    "dims_text": {"col": null, "name": null, "unit": null, "confidence": 0.0, "pattern": "not found"},
-    "pack": {"col": 6, "name": "Packing", "unit": "PC", "confidence": 0.75, "pattern": "number with PC suffix"},
-    "totalCartons": {"col": null, "name": null, "unit": null, "confidence": 0.0, "pattern": "not found"},
-    "grossWeight": {"col": 11, "name": "G.W", "unit": "kg", "confidence": 0.70, "pattern": "weight abbreviation"},
-    "netWeight": {"col": null, "name": null, "unit": null, "confidence": 0.0, "pattern": "not found"},
-    "supplierCBM": {"col": 12, "name": "CBM", "unit": "m³", "confidence": 0.65, "pattern": "volume abbreviation"}
+    "sku": {"col": 0, "name": "ITEM CODE", "unit": null},
+    "title": {"col": 1, "name": "PRODUCT TITLE", "unit": null},
+    "price": {"col": 2, "name": "FOB PRICE USD", "unit": "USD"},
+    "productLength": {"col": null, "name": null, "unit": null},
+    "productWidth": {"col": null, "name": null, "unit": null},
+    "productHeight": {"col": null, "name": null, "unit": null},
+    "cartonLength": {"col": 3, "name": "CARTON SIZE CM", "unit": "cm"},
+    "cartonWidth": {"col": 3, "name": "CARTON SIZE CM", "unit": "cm"},
+    "cartonHeight": {"col": 3, "name": "CARTON SIZE CM", "unit": "cm"},
+    "dims_text": {"col": 3, "name": "CARTON SIZE CM", "unit": null},
+    "pack": {"col": 4, "name": "PACKING", "unit": "PC"},
+    "totalCartons": {"col": null, "name": null, "unit": null},
+    "grossWeight": {"col": 5, "name": "GROSS WEIGHT KG", "unit": "kg"},
+    "netWeight": {"col": null, "name": null, "unit": null},
+    "supplierCBM": {"col": 6, "name": "CBM", "unit": "m³"}
   },
-  "confidence": 0.82,
-  "notes": "Applied pattern recognition for PSP SKU prefix, identified shipping dimensions in cm, detected FOB pricing"
-}`;
+  "confidence": 0.85,
+  "notes": "Mapped all key fields using pattern recognition"
+}
+
+CRITICAL: Do not add extra fields like 'confidence' or 'pattern' to individual mappings. Only use col, name, and unit for each field.`;
 }
 
 /**
@@ -303,6 +305,10 @@ function extractProducts(sheetData, mapping, headerRow) {
 
     // Extract CARTON dimensions (freight - PRIORITY) - safe null checks
     const cartonLengthCol = mapping?.cartonLength?.col;
+    const cartonWidthCol = mapping?.cartonWidth?.col;
+    const cartonHeightCol = mapping?.cartonHeight?.col;
+    
+    // Try combined dimension string first (e.g., "25x20x15")
     if (cartonLengthCol != null) {
       const dimStr = String(row[cartonLengthCol] || "");
       const dims = dimStr.match(/[\d.]+/g);
@@ -312,13 +318,20 @@ function extractProducts(sheetData, mapping, headerRow) {
         product.cartonHeight = parseFloat(dims[2]) || 0;
         product.cartonSource = mapping.cartonLength.name || "";
       } else {
-        const cartonWidthCol = mapping?.cartonWidth?.col;
-        const cartonHeightCol = mapping?.cartonHeight?.col;
-        
-        product.cartonLength = cartonLengthCol != null ? parseFloat(String(row[cartonLengthCol]).replace(/[^0-9.-]/g, "")) || 0 : 0;
-        product.cartonWidth = cartonWidthCol != null ? parseFloat(String(row[cartonWidthCol]).replace(/[^0-9.-]/g, "")) || 0 : 0;
-        product.cartonHeight = cartonHeightCol != null ? parseFloat(String(row[cartonHeightCol]).replace(/[^0-9.-]/g, "")) || 0 : 0;
+        // Single dimension value
+        product.cartonLength = parseFloat(dimStr.replace(/[^0-9.-]/g, "")) || 0;
       }
+    }
+    
+    // Extract individual width/height if mapped separately
+    if (cartonWidthCol != null && cartonWidthCol !== cartonLengthCol) {
+      const dimStr = String(row[cartonWidthCol] || "");
+      product.cartonWidth = parseFloat(dimStr.replace(/[^0-9.-]/g, "")) || 0;
+    }
+    
+    if (cartonHeightCol != null && cartonHeightCol !== cartonLengthCol) {
+      const dimStr = String(row[cartonHeightCol] || "");
+      product.cartonHeight = parseFloat(dimStr.replace(/[^0-9.-]/g, "")) || 0;
     }
 
     // Dims text fallback (safe null check)
@@ -333,21 +346,20 @@ function extractProducts(sheetData, mapping, headerRow) {
       const packStr = String(row[packCol] || "");
       product.pack_text = packStr;
 
-      // INTELLIGENT PACK PARSING (same as frontend)
+      // INTELLIGENT PACK PARSING
       const packRaw = packStr.toUpperCase();
 
-      // If "1PC" or "1 SET", force Pack = 1
-      if (packRaw.includes('1PC') || packRaw.includes('1 PC') || packRaw.includes('1 SET') || packRaw.includes('1SET')) {
-        product.pack = 1;
-      }
-      // Otherwise try regex
-      else {
-        const match = packRaw.match(/(\d+)\s*(PC|SET|PCS)/);
-        if (match && match[1]) {
-          product.pack = parseInt(match[1]);
+      // Extract number followed by PC, PCS, SET, etc.
+      const match = packRaw.match(/(\d+)\s*(PC|PCS|SET|PACK|PIECE)/);
+      if (match && match[1]) {
+        product.pack = parseInt(match[1]);
+      } else {
+        // Fallback: extract any number from the string
+        const numberMatch = packStr.match(/\d+/);
+        if (numberMatch) {
+          product.pack = parseInt(numberMatch[0]);
         } else {
-          // Fallback to simple number extraction
-          product.pack = parseInt(packStr.replace(/[^0-9]/g, "")) || 1;
+          product.pack = 1; // Default
         }
       }
     }
