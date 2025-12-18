@@ -391,7 +391,7 @@ exports.analyzeQuoteSheetV2 = onRequest(
     memory: "2GiB"
   },
   async (req, res) => {
-    console.log("=== FUNCTION START ===");
+    console.log("=== FUNCTION START - WITH FIXES ===");
     console.log("Request method:", req.method);
     console.log("Request headers:", JSON.stringify(req.headers, null, 2));
     console.log("Request body keys:", Object.keys(req.body || {}));
