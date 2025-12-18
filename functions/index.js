@@ -5,10 +5,8 @@
  * Analyzes supplier quote spreadsheets using Gemini Pro AI to extract
  * pricing data, dimensions, and product information from varied formats.
  */
-exports.monitorAICall = require('./debug_monitor').monitorAICall;
 
 const { onRequest } = require("firebase-functions/v2/https");
-const { VertexAI } = require("@google-cloud/vertexai");
 const admin = require("firebase-admin");
 const XLSX = require("xlsx");
 
@@ -17,38 +15,12 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
-// JSON Schema for structured output
+// Required mapping fields for AI analysis
 const MAPPING_FIELDS = [
   "sku", "title", "price", "productLength", "productWidth", "productHeight",
   "cartonLength", "cartonWidth", "cartonHeight", "dims_text", "pack",
   "totalCartons", "grossWeight", "netWeight", "supplierCBM"
 ];
-
-const RESPONSE_SCHEMA = {
-  type: "OBJECT",
-  additionalProperties: false,
-  required: ["headerRow", "mapping"],
-  properties: {
-    headerRow: { type: "INTEGER" },
-    mapping: {
-      type: "OBJECT",
-      additionalProperties: false,
-      properties: Object.fromEntries(
-        MAPPING_FIELDS.map((k) => [k, {
-          type: "OBJECT",
-          additionalProperties: false,
-          properties: {
-            col: { type: "INTEGER", nullable: true },
-            name: { type: "STRING", nullable: true },
-            unit: { type: "STRING", nullable: true },
-          },
-        }])
-      ),
-    },
-    confidence: { type: "NUMBER", nullable: true },
-    notes: { type: "STRING", nullable: true },
-  },
-};
 
 /**
  * Extract text content from XLSX workbook for AI analysis
@@ -587,4 +559,32 @@ exports.health = onRequest({ cors: true }, (req, res) => {
     timestamp: new Date().toISOString(),
     service: "quote-analyzer"
   });
+});
+
+/**
+ * Debug endpoint for monitoring AI calls
+ */
+exports.debug = onRequest({ cors: true }, async (req, res) => {
+  console.log("=== DEBUG ENDPOINT ===");
+  console.log("Request method:", req.method);
+  console.log("Request body:", JSON.stringify(req.body, null, 2));
+  
+  try {
+    // Test auth token
+    const token = await admin.credential.applicationDefault().getAccessToken();
+    console.log("Auth token acquired successfully");
+    
+    res.json({
+      status: "debug-ok",
+      timestamp: new Date().toISOString(),
+      auth: "token-acquired",
+      body: req.body
+    });
+  } catch (error) {
+    console.error("Debug error:", error);
+    res.status(500).json({
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
