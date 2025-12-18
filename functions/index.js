@@ -5,6 +5,7 @@
  * Analyzes supplier quote spreadsheets using Gemini Pro AI to extract
  * pricing data, dimensions, and product information from varied formats.
  */
+exports.debug = require('./debug_monitor').monitorAICall;
 
 const { onRequest } = require("firebase-functions/v2/https");
 const { VertexAI } = require("@google-cloud/vertexai");
