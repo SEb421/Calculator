@@ -19,7 +19,7 @@ if (!admin.apps.length) {
 
 // JSON Schema for structured output
 const MAPPING_FIELDS = [
-  "sku", "price", "productLength", "productWidth", "productHeight",
+  "sku", "title", "price", "productLength", "productWidth", "productHeight",
   "cartonLength", "cartonWidth", "cartonHeight", "dims_text", "pack",
   "totalCartons", "grossWeight", "netWeight", "supplierCBM"
 ];
@@ -83,58 +83,77 @@ function extractSheetData(xlsxData) {
  * Build the AI prompt for quote sheet analysis
  */
 function buildAnalysisPrompt(sheetData) {
-  const previewRows = sheetData.data.slice(0, 15); // First 15 rows for context
+  const previewRows = sheetData.data.slice(0, 20); // More context for better analysis
   const tableStr = previewRows.map((row, i) =>
     `Row ${i}: ${row.map(c => `"${c}"`).join(" | ")}`
   ).join("\n");
 
-  // Ensure we are getting exactly what we need
-  return `You are a high-precision data extraction engine for a freight business.
-  
-  TASK: Map the columns of a supplier quote spreadsheet to our internal schema.
-  
-  CONTEXT: Suppliers often include:
-  - Product Size (mm, for catalog)
-  - Carton Size (cm, for shipping/freight) - THIS IS THE PRIORITY
-  - G.W. (Gross Weight)
-  - CBM (Total or Unit)
-  - Packing (Qty per Box)
-  
-  DATA (first 15 rows):
-  ${tableStr}
-  
-  SCHEMATIC INSTRUCTIONS:
-  1. Identify the HEADER ROW index (0-based) where labels like "Item", "Price", "Size" appear.
-  2. Map these fields:
-     - sku: Item code/name
-     - price: Unit FOB/Ex-Work price
-     - productLength, productWidth, productHeight: The catalog item size
-     - cartonLength, cartonWidth, cartonHeight: The shipping box size
-     - pack: Qty per carton
-     - grossWeight: Shipping weight
-     - supplierCBM: The volume provided by supplier
-  3. If a field is not found, use col: null.
-  
-  OUTPUT FORMAT: Return ONLY valid JSON.
-  
-  {
-    "headerRow": 0,
-    "mapping": {
-      "sku": {"col": 1, "name": "Item No"},
-      "price": {"col": 10, "name": "Price"},
-      "productLength": {"col": 3, "name": "Size", "unit": "mm"},
-      "productWidth": {"col": 3, "name": "Size", "unit": "mm"},
-      "productHeight": {"col": 3, "name": "Size", "unit": "mm"},
-      "cartonLength": {"col": 7, "name": "Carton", "unit": "cm"},
-      "cartonWidth": {"col": 8, "name": "Carton", "unit": "cm"},
-      "cartonHeight": {"col": 9, "name": "Carton", "unit": "cm"},
-      "pack": {"col": 6, "name": "Packing"},
-      "grossWeight": {"col": 11, "name": "G.W"},
-      "supplierCBM": {"col": 12, "name": "CBM"}
-    },
-    "confidence": 1.0,
-    "notes": "Semantic reasoning"
-  }`;
+  // Enhanced AI prompt with pattern recognition
+  return `You are Eli's Brain - an advanced AI system specialized in analyzing supplier quote spreadsheets with intelligent pattern recognition.
+
+MISSION: Extract and map supplier data with probabilistic reasoning and pattern matching.
+
+INTELLIGENCE RULES:
+1. SKU PATTERNS: Look for codes starting with "PSP", "COMP", or "CC" - these are always SKUs
+2. PRICE PATTERNS: Identify currency symbols (£, $, €, USD, GBP) and decimal numbers
+3. DIMENSION PATTERNS: Look for measurements with units (mm, cm, inches) and "x" separators
+4. WEIGHT PATTERNS: Numbers followed by kg, g, lbs, oz
+5. PACKING PATTERNS: Numbers followed by PC, PCS, SET, PACK, or similar
+6. TITLE PATTERNS: Look for product names, descriptions, or titles (usually longest text fields)
+
+PROBABILISTIC REASONING:
+- If multiple columns could be SKU, choose the one with consistent prefixes (PSP/COMP/CC)
+- If multiple price columns exist, prioritize FOB/EXW over retail prices
+- For dimensions, prioritize carton/shipping sizes over product sizes for freight calculations
+- Look for hidden patterns in seemingly random data
+
+DATA ANALYSIS (first 20 rows):
+${tableStr}
+
+ENHANCED MAPPING REQUIREMENTS:
+Map these fields using pattern recognition and probability:
+- sku: Item codes (prioritize PSP/COMP/CC prefixes)
+- title: Product names/descriptions (longest descriptive text)
+- price: FOB/EXW unit prices (look for currency indicators)
+- productLength/Width/Height: Catalog item dimensions (usually mm)
+- cartonLength/Width/Height: Shipping box dimensions (usually cm) - PRIORITY
+- dims_text: Any dimension text that doesn't fit standard format
+- pack: Quantity per carton/box
+- totalCartons: Total number of cartons (if specified)
+- grossWeight: Shipping weight (kg preferred)
+- netWeight: Product weight without packaging
+- supplierCBM: Volume measurements (m³ or similar)
+
+SMART ANALYSIS:
+1. Examine column headers for semantic meaning
+2. Analyze data patterns within columns
+3. Use probability to resolve ambiguous mappings
+4. Consider supplier naming conventions
+
+OUTPUT: Return ONLY valid JSON with confidence scoring:
+
+{
+  "headerRow": 0,
+  "mapping": {
+    "sku": {"col": 1, "name": "Item Code", "unit": null, "confidence": 0.95, "pattern": "PSP prefix detected"},
+    "title": {"col": 2, "name": "Description", "unit": null, "confidence": 0.90, "pattern": "longest text field"},
+    "price": {"col": 10, "name": "FOB USD", "unit": "USD", "confidence": 0.85, "pattern": "currency symbol found"},
+    "productLength": {"col": null, "name": null, "unit": null, "confidence": 0.0, "pattern": "not found"},
+    "productWidth": {"col": null, "name": null, "unit": null, "confidence": 0.0, "pattern": "not found"},
+    "productHeight": {"col": null, "name": null, "unit": null, "confidence": 0.0, "pattern": "not found"},
+    "cartonLength": {"col": 7, "name": "Carton L", "unit": "cm", "confidence": 0.80, "pattern": "dimension with cm unit"},
+    "cartonWidth": {"col": 8, "name": "Carton W", "unit": "cm", "confidence": 0.80, "pattern": "dimension with cm unit"},
+    "cartonHeight": {"col": 9, "name": "Carton H", "unit": "cm", "confidence": 0.80, "pattern": "dimension with cm unit"},
+    "dims_text": {"col": null, "name": null, "unit": null, "confidence": 0.0, "pattern": "not found"},
+    "pack": {"col": 6, "name": "Packing", "unit": "PC", "confidence": 0.75, "pattern": "number with PC suffix"},
+    "totalCartons": {"col": null, "name": null, "unit": null, "confidence": 0.0, "pattern": "not found"},
+    "grossWeight": {"col": 11, "name": "G.W", "unit": "kg", "confidence": 0.70, "pattern": "weight abbreviation"},
+    "netWeight": {"col": null, "name": null, "unit": null, "confidence": 0.0, "pattern": "not found"},
+    "supplierCBM": {"col": 12, "name": "CBM", "unit": "m³", "confidence": 0.65, "pattern": "volume abbreviation"}
+  },
+  "confidence": 0.82,
+  "notes": "Applied pattern recognition for PSP SKU prefix, identified shipping dimensions in cm, detected FOB pricing"
+}`;
 }
 
 /**
@@ -244,6 +263,7 @@ function extractProducts(sheetData, mapping, headerRow) {
 
     const product = {
       sku: "",
+      title: "",
       unitPrice: 0,
       // Product dimensions (reference only)
       productLength: 0,
@@ -274,6 +294,12 @@ function extractProducts(sheetData, mapping, headerRow) {
     const skuCol = mapping?.sku?.col;
     if (skuCol != null) {
       product.sku = String(row[skuCol] || "").trim();
+    }
+
+    // Extract title (safe null check)
+    const titleCol = mapping?.title?.col;
+    if (titleCol != null) {
+      product.title = String(row[titleCol] || "").trim();
     }
 
     // Extract price (safe null check)
