@@ -60,50 +60,22 @@ function buildAnalysisPrompt(sheetData) {
     `Row ${i}: ${row.map(c => `"${c}"`).join(" | ")}`
   ).join("\n");
 
-  // Enhanced AI prompt with pattern recognition
-  return `You are Eli's Brain - an advanced AI system specialized in analyzing supplier quote spreadsheets with intelligent pattern recognition.
+  // Simplified AI prompt for reliable JSON output
+  return `Analyze this supplier spreadsheet and map the columns to extract product data.
 
-MISSION: Extract and map supplier data with probabilistic reasoning and pattern matching.
-
-INTELLIGENCE RULES:
-1. SKU PATTERNS: Look for codes starting with "PSP", "COMP", or "CC" - these are always SKUs
-2. PRICE PATTERNS: Identify currency symbols (£, $, €, USD, GBP) and decimal numbers
-3. DIMENSION PATTERNS: Look for measurements with units (mm, cm, inches) and "x" separators
-4. WEIGHT PATTERNS: Numbers followed by kg, g, lbs, oz
-5. PACKING PATTERNS: Numbers followed by PC, PCS, SET, PACK, or similar
-6. TITLE PATTERNS: Look for product names, descriptions, or titles (usually longest text fields)
-
-PROBABILISTIC REASONING:
-- If multiple columns could be SKU, choose the one with consistent prefixes (PSP/COMP/CC)
-- If multiple price columns exist, prioritize FOB/EXW over retail prices
-- For dimensions, prioritize carton/shipping sizes over product sizes for freight calculations
-- Look for hidden patterns in seemingly random data
-
-DATA ANALYSIS (first 20 rows):
+DATA (first 20 rows):
 ${tableStr}
 
-ENHANCED MAPPING REQUIREMENTS:
-Map these fields using pattern recognition and probability:
-- sku: Item codes (prioritize PSP/COMP/CC prefixes)
-- title: Product names/descriptions (longest descriptive text)
-- price: FOB/EXW unit prices (look for currency indicators)
-- productLength/Width/Height: Catalog item dimensions (usually mm)
-- cartonLength/Width/Height: Shipping box dimensions (usually cm) - PRIORITY
-- dims_text: Any dimension text that doesn't fit standard format
-- pack: Quantity per carton/box
-- totalCartons: Total number of cartons (if specified)
-- grossWeight: Shipping weight (kg preferred)
-- netWeight: Product weight without packaging
-- supplierCBM: Volume measurements (m³ or similar)
+Map these fields by examining column headers and data patterns:
+- sku: Item codes (look for PSP/COMP/CC prefixes)
+- title: Product names/descriptions
+- price: Unit prices (FOB/EXW preferred)
+- cartonLength/Width/Height: Shipping dimensions
+- pack: Quantity per carton (look for PC/PCS)
+- grossWeight: Weight in kg
+- supplierCBM: Volume in m³
 
-SMART ANALYSIS:
-1. Examine column headers for semantic meaning
-2. Analyze data patterns within columns
-3. Use probability to resolve ambiguous mappings
-4. Consider supplier naming conventions
-
-OUTPUT: Return ONLY valid JSON in this exact format:
-
+Return ONLY this JSON format (no extra text):
 {
   "headerRow": 0,
   "mapping": {
@@ -122,34 +94,30 @@ OUTPUT: Return ONLY valid JSON in this exact format:
     "grossWeight": {"col": 5, "name": "GROSS WEIGHT KG", "unit": "kg"},
     "netWeight": {"col": null, "name": null, "unit": null},
     "supplierCBM": {"col": 6, "name": "CBM", "unit": "m³"}
-  },
-  "confidence": 0.85,
-  "notes": "Mapped all key fields using pattern recognition"
-}
-
-CRITICAL: Do not add extra fields like 'confidence' or 'pattern' to individual mappings. Only use col, name, and unit for each field.`;
+  }
+}`;
 }
 
 /**
  * Ensure all required mapping fields exist with proper defaults
  */
 function normalizeMapping(mapping) {
-  const normalized = { ...mapping };
+  const normalized = {};
   
-  // Ensure all required fields exist
+  // Ensure all required fields exist and strip extra properties
   MAPPING_FIELDS.forEach(field => {
-    if (!normalized[field]) {
+    if (mapping[field]) {
+      // Only keep the required properties, strip confidence/pattern/etc
+      normalized[field] = {
+        col: mapping[field].col ?? null,
+        name: mapping[field].name ?? null,
+        unit: mapping[field].unit ?? null
+      };
+    } else {
       normalized[field] = {
         col: null,
         name: null,
         unit: null
-      };
-    } else {
-      // Ensure each field has all required properties
-      normalized[field] = {
-        col: normalized[field].col ?? null,
-        name: normalized[field].name ?? null,
-        unit: normalized[field].unit ?? null
       };
     }
   });
@@ -199,17 +167,28 @@ function parseAIResponse(responseText) {
     // Try to fix common JSON issues
     let fixedJson = jsonStr;
     
+    // Remove extra properties that might be causing issues
+    fixedJson = fixedJson.replace(/"confidence":\s*[\d.]+,?\s*/g, '');
+    fixedJson = fixedJson.replace(/"pattern":\s*"[^"]*",?\s*/g, '');
+    
+    // Fix trailing commas
+    fixedJson = fixedJson.replace(/,\s*}/g, '}');
+    fixedJson = fixedJson.replace(/,\s*]/g, ']');
+    
     // Fix missing closing braces
     const openBraces = (fixedJson.match(/\{/g) || []).length;
     const closeBraces = (fixedJson.match(/\}/g) || []).length;
     if (openBraces > closeBraces) {
       fixedJson += '}'.repeat(openBraces - closeBraces);
-      console.log("Attempting to fix missing closing braces...");
-      try {
-        return JSON.parse(fixedJson);
-      } catch (e2) {
-        console.error("Fix attempt failed");
-      }
+    }
+    
+    console.log("Attempting to fix JSON issues...");
+    try {
+      const parsed = JSON.parse(fixedJson);
+      console.log("JSON fix successful!");
+      return parsed;
+    } catch (e2) {
+      console.error("Fix attempt failed:", e2.message);
     }
     
     throw new Error("AI returned malformed JSON: " + e.message);
