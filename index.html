@@ -675,43 +675,43 @@
             color: #6b7280 !important;
         }
 
-        /* Price column (A) - Indigo accent */
-        .jexcel-custom .jexcel tbody td[data-x="0"] {
+        /* Price column (C) - Indigo accent */
+        .jexcel-custom .jexcel tbody td[data-x="2"] {
             font-weight: 700 !important;
             color: #4f46e5 !important;
             font-size: 14px !important;
         }
 
-        .dark .jexcel-custom .jexcel tbody td[data-x="0"] {
+        .dark .jexcel-custom .jexcel tbody td[data-x="2"] {
             color: #a5b4fc !important;
         }
 
-        /* Dimension columns (B, C, D = L, W, H) - Cyan accent */
-        .jexcel-custom .jexcel thead td[data-x="1"],
-        .jexcel-custom .jexcel thead td[data-x="2"],
-        .jexcel-custom .jexcel thead td[data-x="3"] {
+        /* Dimension columns (C, D, E = L, W, H) - Cyan accent */
+        .jexcel-custom .jexcel thead td[data-x="3"],
+        .jexcel-custom .jexcel thead td[data-x="4"],
+        .jexcel-custom .jexcel thead td[data-x="5"] {
             color: #0891b2 !important;
             background: linear-gradient(180deg, #ecfeff 0%, #cffafe 100%) !important;
         }
 
-        .dark .jexcel-custom .jexcel thead td[data-x="1"],
-        .dark .jexcel-custom .jexcel thead td[data-x="2"],
-        .dark .jexcel-custom .jexcel thead td[data-x="3"] {
+        .dark .jexcel-custom .jexcel thead td[data-x="3"],
+        .dark .jexcel-custom .jexcel thead td[data-x="4"],
+        .dark .jexcel-custom .jexcel thead td[data-x="5"] {
             color: #22d3ee !important;
             background: linear-gradient(180deg, rgba(34, 211, 238, 0.15) 0%, rgba(8, 145, 178, 0.2) 100%) !important;
         }
 
-        .jexcel-custom .jexcel tbody td[data-x="1"],
-        .jexcel-custom .jexcel tbody td[data-x="2"],
-        .jexcel-custom .jexcel tbody td[data-x="3"] {
+        .jexcel-custom .jexcel tbody td[data-x="3"],
+        .jexcel-custom .jexcel tbody td[data-x="4"],
+        .jexcel-custom .jexcel tbody td[data-x="5"] {
             color: #0e7490 !important;
             font-weight: 600 !important;
             background: rgba(6, 182, 212, 0.03) !important;
         }
 
-        .dark .jexcel-custom .jexcel tbody td[data-x="1"],
-        .dark .jexcel-custom .jexcel tbody td[data-x="2"],
-        .dark .jexcel-custom .jexcel tbody td[data-x="3"] {
+        .dark .jexcel-custom .jexcel tbody td[data-x="3"],
+        .dark .jexcel-custom .jexcel tbody td[data-x="4"],
+        .dark .jexcel-custom .jexcel tbody td[data-x="5"] {
             color: #67e8f9 !important;
             background: rgba(6, 182, 212, 0.08) !important;
         }
@@ -2834,7 +2834,7 @@
                 setTimeout(() => {
                     const container = document.getElementById('jspreadsheet-container');
                     if (container && container.jspreadsheet) {
-                        const emptyData = Array(25).fill(null).map(() => ['', '', '', '', '', '', '']);
+                        const emptyData = Array(25).fill(null).map(() => ['', '', '', '', '', '', '', '', '']);
                         container.jspreadsheet.setData(emptyData);
                     }
                 }, 100);
@@ -3276,6 +3276,7 @@
 
                     return {
                         sku: p.sku || '',
+                        title: p.title || '',
                         unitUSD: parseFloat(p.unitPrice || 0).toFixed(2),
                         // Store both dimension sets
                         productL: productL,
@@ -3309,6 +3310,7 @@
                     if (container && container.jspreadsheet) {
                         const spreadsheetData = data.map(d => [
                             d.image || '', // Image Col
+                            d.title || '', // Title Col
                             String(d.unitUSD || ''),
                             String(d.L || ''),
                             String(d.W || ''),
@@ -3317,7 +3319,7 @@
                             String(d.pack > 1 ? d.pack : ''),
                             '' // Weight (Notes/Hidden)
                         ]);
-                        while (spreadsheetData.length < 25) spreadsheetData.push(['', '', '', '', '', '', '', '']); // 8 cols
+                        while (spreadsheetData.length < 25) spreadsheetData.push(['', '', '', '', '', '', '', '', '']); // 9 cols
                         container.jspreadsheet.setData(spreadsheetData);
                     }
                 }, 100);
@@ -3807,6 +3809,7 @@
                                                         const [l, w, h] = parseDim(dimsArr[i]);
                                                         initialData.push([
                                                             '', // Image
+                                                            '', // Title (empty initially)
                                                             priceArr[i] || '',
                                                             l, w, h,
                                                             skuArr[i] || '',
@@ -3819,6 +3822,7 @@
                                                         data: initialData,
                                                         columns: [
                                                             { type: 'image', title: 'Image', width: 80, align: 'center' },
+                                                            { type: 'text', title: 'Title', width: 150, align: 'left' },
                                                             { type: 'text', title: 'Price $', width: 80, align: 'right' },
                                                             { type: 'text', title: 'L', width: 50, align: 'center' },
                                                             { type: 'text', title: 'W', width: 50, align: 'center' },
@@ -3827,7 +3831,7 @@
                                                             { type: 'text', title: 'Pack', width: 50, align: 'center' },
                                                             { type: 'text', title: 'Wt kg', width: 55, align: 'center' }
                                                         ],
-                                                        minDimensions: [8, 50],
+                                                        minDimensions: [9, 50],
                                                         tableOverflow: false, // Let container scroll
                                                         tableWidth: '100%',
                                                         columnSorting: false,
@@ -3840,15 +3844,15 @@
                                                         autoIncrement: false,
                                                         defaultColWidth: 60,
                                                         onchange: (instance, cell, x, y, value) => {
-                                                            // Price is now x=1. L=2, W=3, H=4.
-                                                            // Check if L (x=2) changed and has units
-                                                            if (x == 2 && value) {
+                                                            // Price is now x=2. L=3, W=4, H=5.
+                                                            // Check if L (x=3) changed and has units
+                                                            if (x == 3 && value) {
                                                                 const cleaned = String(value).replace(/\s*(cm|mm|in|inch|inches)\s*$/i, '');
                                                                 const parts = cleaned.split(/[x×*\-\s,]+/).map(p => p.trim()).filter(Boolean);
                                                                 if (parts.length >= 3) {
-                                                                    instance.jspreadsheet.setValueFromCoords(2, y, parts[0], true);
-                                                                    instance.jspreadsheet.setValueFromCoords(3, y, parts[1], true);
-                                                                    instance.jspreadsheet.setValueFromCoords(4, y, parts[2], true);
+                                                                    instance.jspreadsheet.setValueFromCoords(3, y, parts[0], true);
+                                                                    instance.jspreadsheet.setValueFromCoords(4, y, parts[1], true);
+                                                                    instance.jspreadsheet.setValueFromCoords(5, y, parts[2], true);
                                                                 }
                                                             }
                                                             const data = instance.jspreadsheet.getData();
@@ -3872,21 +3876,21 @@
                                                                         const cleaned = lVal.replace(/\s*(cm|mm|in|inch|inches)\s*$/i, '');
                                                                         const parts = cleaned.split(/[x×*\-\s,]+/).map(p => p.trim()).filter(Boolean);
                                                                         if (parts.length >= 3) {
-                                                                            instance.jspreadsheet.setValueFromCoords(2, y, parts[0], true);
-                                                                            instance.jspreadsheet.setValueFromCoords(3, y, parts[1], true);
-                                                                            instance.jspreadsheet.setValueFromCoords(4, y, parts[2], true);
+                                                                            instance.jspreadsheet.setValueFromCoords(3, y, parts[0], true);
+                                                                            instance.jspreadsheet.setValueFromCoords(4, y, parts[1], true);
+                                                                            instance.jspreadsheet.setValueFromCoords(5, y, parts[2], true);
                                                                         }
                                                                     }
                                                                 });
                                                                 const finalData = instance.jspreadsheet.getData();
-                                                                setPricesText(finalData.map(r => r[1] || '').join('\n'));
+                                                                setPricesText(finalData.map(r => r[2] || '').join('\n'));
                                                                 setDimsText(finalData.map(r => {
-                                                                    const l = r[2] || ''; const w = r[3] || ''; const h = r[4] || '';
+                                                                    const l = r[3] || ''; const w = r[4] || ''; const h = r[5] || '';
                                                                     if (l || w || h) return `${l}x${w}x${h}`; return '';
                                                                 }).join('\n'));
-                                                                setSkusText(finalData.map(r => r[5] || '').join('\n'));
-                                                                setPackText(finalData.map(r => r[6] || '').join('\n'));
-                                                                setWeightText(finalData.map(r => r[7] || '').join('\n'));
+                                                                setSkusText(finalData.map(r => r[6] || '').join('\n'));
+                                                                setPackText(finalData.map(r => r[7] || '').join('\n'));
+                                                                setWeightText(finalData.map(r => r[8] || '').join('\n'));
                                                             }, 50);
                                                         },
                                                         contextMenu: function (obj, x, y, e) {
