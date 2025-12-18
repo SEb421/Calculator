@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Frontend Feature Test</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+    <h1>Testing Frontend Features</h1>
+    <div id="results"></div>
+    
+    <script>
+        async function testFeatures() {
+            const results = [];
+            
+            // Test 1: Currency Conversion API
+            try {
+                const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+                const data = await response.json();
+                if (data.rates && data.rates.GBP) {
+                    results.push('✅ Currency API Working: 1 USD = ' + data.rates.GBP + ' GBP');
+                } else {
+                    results.push('❌ Currency API Failed: No rates returned');
+                }
+            } catch (e) {
+                results.push('❌ Currency API Error: ' + e.message);
+            }
+            
+            // Test 2: XLSX Library
+            try {
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.aoa_to_sheet([['Test', 'Data'], [1, 2]]);
+                XLSX.utils.book_append_sheet(wb, ws, "Test");
+                results.push('✅ XLSX Library Loaded');
+            } catch (e) {
+                results.push('❌ XLSX Library Error: ' + e.message);
+            }
+            
+            // Test 3: Backend API
+            try {
+                const testData = {
+                    rows: [
+                        ["SKU", "Title", "Price"],
+                        ["PSP001", "Test Product", "10.50"]
+                    ]
+                };
+                
+                const response = await fetch('https://analyzequotesheetv2-f3lqrbycya-uc.a.run.app/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(testData)
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.products && data.products.length > 0) {
+                        const p = data.products[0];
+                        results.push('✅ Backend API Working');
+                        results.push('  - SKU: ' + (p.sku || 'MISSING'));
+                        results.push('  - Title: ' + (p.title || 'MISSING'));
+                        results.push('  - Price: ' + (p.unitPrice || 'MISSING'));
+                    } else {
+                        results.push('❌ Backend returned no products');
+                    }
+                } else {
+                    results.push('❌ Backend API Failed: ' + response.status);
+                }
+            } catch (e) {
+                results.push('❌ Backend API Error: ' + e.message);
+            }
+            
+            document.getElementById('results').innerHTML = '<pre>' + results.join('\n') + '</pre>';
+        }
+        
+        testFeatures();
+    </script>
+</body>
+</html>
