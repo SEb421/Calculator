@@ -76,9 +76,15 @@ INTELLIGENT ANALYSIS INSTRUCTIONS:
    - Look for measurements in cm, mm, inches
    - May be combined (e.g., "25x20x15") or separate columns
    - Could be labeled as "size", "dimensions", "L×W×H", "carton size", etc.
-7. **Pack Quantity**: Numbers followed by "PC", "PCS", "SET", "PACK" or standalone quantities
-8. **Weight**: Values with "kg", "g", "lb" or in weight-appropriate ranges
-9. **Volume**: CBM, m³, cubic measurements
+   - **CRITICAL**: If you see "CARTON SIZE" followed by empty header columns, those are likely L, W, H dimensions
+   - Look for 3 consecutive columns with numeric data that could be dimensions
+7. **Pack Quantity**: Numbers followed by "PC", "PCS", "SET", "PACK" or in "PACKING" columns
+8. **Weight**: Values with "kg", "g", "lb", "G.W", "GROSS WEIGHT" or in weight-appropriate ranges
+9. **Volume**: CBM, m³, cubic measurements - often in columns labeled "CBM"
+10. **Multi-Column Patterns**: 
+    - Carton dimensions often split across 3 columns after "CARTON SIZE"
+    - Empty headers may indicate continuation of previous column
+    - Analyze data patterns in unnamed columns
 
 SMART MAPPING RULES:
 - If dimensions are combined in one cell (e.g., "25x20x15"), map all three dimension fields to that column
@@ -86,6 +92,10 @@ SMART MAPPING RULES:
 - Prioritize carton dimensions over product dimensions for shipping
 - Look for data consistency patterns across rows
 - Consider column position context (SKUs often first, prices often early, dimensions grouped)
+- **CARTON DIMENSION DETECTION**: If "CARTON SIZE" is followed by 2-3 empty/unnamed columns with numeric data, map them as cartonLength, cartonWidth, cartonHeight
+- **WEIGHT MAPPING**: "G.W" = grossWeight, look for numeric values in appropriate range (1-200kg typically)
+- **CBM MAPPING**: "CBM" columns contain volume data, usually decimal values (0.001-1.000 range)
+- **PACK MAPPING**: "PACKING" columns contain quantity info, look for "PC", "SET", numbers
 
 Return ONLY this JSON format (no extra text):
 {
