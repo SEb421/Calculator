@@ -201,6 +201,24 @@ function parseAIResponse(responseText) {
       console.error("Malformed JSON around pos", pos, jsonStr.slice(Math.max(0, pos - 80), pos + 80));
     }
     console.error("Malformed JSON (first 500 chars):", jsonStr.substring(0, 500));
+    console.error("Full response length:", responseText.length);
+    
+    // Try to fix common JSON issues
+    let fixedJson = jsonStr;
+    
+    // Fix missing closing braces
+    const openBraces = (fixedJson.match(/\{/g) || []).length;
+    const closeBraces = (fixedJson.match(/\}/g) || []).length;
+    if (openBraces > closeBraces) {
+      fixedJson += '}'.repeat(openBraces - closeBraces);
+      console.log("Attempting to fix missing closing braces...");
+      try {
+        return JSON.parse(fixedJson);
+      } catch (e2) {
+        console.error("Fix attempt failed");
+      }
+    }
+    
     throw new Error("AI returned malformed JSON: " + e.message);
   }
 }
@@ -440,10 +458,9 @@ exports.analyzeQuoteSheetV2 = onRequest(
           parts: [{ text: prompt }]
         }],
         generationConfig: {
-          responseMimeType: "application/json",
-          temperature: 0.2,
-          topP: 0.8,
-          maxOutputTokens: 2048
+          temperature: 0.1,
+          topP: 0.9,
+          maxOutputTokens: 4096
         }
       };
 
