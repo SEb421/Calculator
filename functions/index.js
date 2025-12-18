@@ -2,8 +2,14 @@
  * AI-Powered Quote Sheet Analyzer
  * Firebase Cloud Function for Landed Cost Calculator
  * 
- * Analyzes supplier quote spreadsheets using Gemini Pro AI to extract
+ * Analyzes supplier quote spreadsheets using Gemini 3 Flash AI to extract
  * pricing data, dimensions, and product information from varied formats.
+ * 
+ * Gemini 3 Flash Features:
+ * - Thinking levels for controlled reasoning (minimal, low, medium, high)
+ * - Improved multimodal processing with media_resolution control
+ * - Enhanced function calling with streaming support
+ * - Better structured output validation
  */
 
 const { onRequest } = require("firebase-functions/v2/https");
@@ -60,8 +66,16 @@ function buildAnalysisPrompt(sheetData) {
     `Row ${i}: ${row.map(c => `"${c}"`).join(" | ")}`
   ).join("\n");
 
-  // Enhanced AI prompt with intelligent pattern recognition
-  return `You are an expert data analyst specializing in supplier spreadsheet analysis. Analyze this spreadsheet and intelligently map columns to extract product data.
+  // Enhanced AI prompt leveraging Gemini 3 Flash's advanced reasoning
+  return `ADVANCED SPREADSHEET ANALYSIS TASK
+
+You are an expert data analyst with deep expertise in supplier spreadsheet analysis. Use your advanced reasoning capabilities to perform intelligent column mapping and data extraction.
+
+REASONING PROCESS:
+1. **ANALYZE STRUCTURE**: Examine the spreadsheet layout, identify header patterns, and understand the data organization
+2. **PATTERN RECOGNITION**: Look beyond keywords - analyze data types, formats, and contextual relationships
+3. **INTELLIGENT MAPPING**: Use multi-step reasoning to map columns based on content patterns, not just labels
+4. **VALIDATION**: Cross-check your mappings against the actual data to ensure logical consistency
 
 SPREADSHEET DATA (first 25 rows):
 ${tableStr}
@@ -544,7 +558,7 @@ exports.analyzeQuoteSheetV2 = onRequest(
 
       const projectId = "landed-calculator";
       const location = "us-central1";
-      const modelId = "gemini-2.5-flash";
+      const modelId = "gemini-3-flash-preview";
       const apiEndpoint = `https://${location}-aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/${location}/publishers/google/models/${modelId}:generateContent`;
 
       const requestBody = {
@@ -555,7 +569,185 @@ exports.analyzeQuoteSheetV2 = onRequest(
         generationConfig: {
           temperature: 0.1,
           topP: 0.9,
-          maxOutputTokens: 4096
+          maxOutputTokens: 8192, // Increased for better analysis
+          // Gemini 3 Flash: Use medium thinking level for complex spreadsheet analysis
+          thinking_level: "MEDIUM",
+          // Gemini 3 Flash: Enhanced structured output
+          response_mime_type: "application/json",
+          response_schema: {
+            type: "object",
+            properties: {
+              headerRow: { type: "integer" },
+              mapping: {
+                type: "object",
+                properties: {
+                  sku: {
+                    type: "object",
+                    properties: {
+                      col: { type: ["integer", "null"] },
+                      name: { type: ["string", "null"] },
+                      unit: { type: ["string", "null"] }
+                    },
+                    required: ["col", "name", "unit"]
+                  },
+                  title: {
+                    type: "object",
+                    properties: {
+                      col: { type: ["integer", "null"] },
+                      name: { type: ["string", "null"] },
+                      unit: { type: ["string", "null"] }
+                    },
+                    required: ["col", "name", "unit"]
+                  },
+                  price: {
+                    type: "object",
+                    properties: {
+                      col: { type: ["integer", "null"] },
+                      name: { type: ["string", "null"] },
+                      unit: { type: ["string", "null"] }
+                    },
+                    required: ["col", "name", "unit"]
+                  },
+                  productLength: {
+                    type: "object",
+                    properties: {
+                      col: { type: ["integer", "null"] },
+                      name: { type: ["string", "null"] },
+                      unit: { type: ["string", "null"] }
+                    },
+                    required: ["col", "name", "unit"]
+                  },
+                  productWidth: {
+                    type: "object",
+                    properties: {
+                      col: { type: ["integer", "null"] },
+                      name: { type: ["string", "null"] },
+                      unit: { type: ["string", "null"] }
+                    },
+                    required: ["col", "name", "unit"]
+                  },
+                  productHeight: {
+                    type: "object",
+                    properties: {
+                      col: { type: ["integer", "null"] },
+                      name: { type: ["string", "null"] },
+                      unit: { type: ["string", "null"] }
+                    },
+                    required: ["col", "name", "unit"]
+                  },
+                  cartonLength: {
+                    type: "object",
+                    properties: {
+                      col: { type: ["integer", "null"] },
+                      name: { type: ["string", "null"] },
+                      unit: { type: ["string", "null"] }
+                    },
+                    required: ["col", "name", "unit"]
+                  },
+                  cartonWidth: {
+                    type: "object",
+                    properties: {
+                      col: { type: ["integer", "null"] },
+                      name: { type: ["string", "null"] },
+                      unit: { type: ["string", "null"] }
+                    },
+                    required: ["col", "name", "unit"]
+                  },
+                  cartonHeight: {
+                    type: "object",
+                    properties: {
+                      col: { type: ["integer", "null"] },
+                      name: { type: ["string", "null"] },
+                      unit: { type: ["string", "null"] }
+                    },
+                    required: ["col", "name", "unit"]
+                  },
+                  dims_text: {
+                    type: "object",
+                    properties: {
+                      col: { type: ["integer", "null"] },
+                      name: { type: ["string", "null"] },
+                      unit: { type: ["string", "null"] }
+                    },
+                    required: ["col", "name", "unit"]
+                  },
+                  pack: {
+                    type: "object",
+                    properties: {
+                      col: { type: ["integer", "null"] },
+                      name: { type: ["string", "null"] },
+                      unit: { type: ["string", "null"] }
+                    },
+                    required: ["col", "name", "unit"]
+                  },
+                  totalCartons: {
+                    type: "object",
+                    properties: {
+                      col: { type: ["integer", "null"] },
+                      name: { type: ["string", "null"] },
+                      unit: { type: ["string", "null"] }
+                    },
+                    required: ["col", "name", "unit"]
+                  },
+                  grossWeight: {
+                    type: "object",
+                    properties: {
+                      col: { type: ["integer", "null"] },
+                      name: { type: ["string", "null"] },
+                      unit: { type: ["string", "null"] }
+                    },
+                    required: ["col", "name", "unit"]
+                  },
+                  netWeight: {
+                    type: "object",
+                    properties: {
+                      col: { type: ["integer", "null"] },
+                      name: { type: ["string", "null"] },
+                      unit: { type: ["string", "null"] }
+                    },
+                    required: ["col", "name", "unit"]
+                  },
+                  supplierCBM: {
+                    type: "object",
+                    properties: {
+                      col: { type: ["integer", "null"] },
+                      name: { type: ["string", "null"] },
+                      unit: { type: ["string", "null"] }
+                    },
+                    required: ["col", "name", "unit"]
+                  }
+                },
+                required: ["sku", "title", "price", "productLength", "productWidth", "productHeight", "cartonLength", "cartonWidth", "cartonHeight", "dims_text", "pack", "totalCartons", "grossWeight", "netWeight", "supplierCBM"]
+              }
+            },
+            required: ["headerRow", "mapping"]
+          }
+        },
+        // Gemini 3 Flash: Enhanced system instruction for better reasoning
+        systemInstruction: {
+          parts: [{
+            text: `You are an expert data analyst specializing in supplier spreadsheet analysis with advanced pattern recognition capabilities. 
+
+CORE EXPERTISE:
+- Intelligent column mapping beyond simple keyword matching
+- Complex data pattern recognition across varied supplier formats
+- Robust handling of messy, inconsistent spreadsheet layouts
+- Advanced dimension parsing (combined strings, separate columns, mixed units)
+- Multi-language product description analysis
+- Currency and measurement unit standardization
+
+ANALYSIS APPROACH:
+1. DEEP PATTERN ANALYSIS: Look for data consistency patterns, not just keywords
+2. CONTEXTUAL REASONING: Use surrounding data to infer column purposes
+3. INTELLIGENT FALLBACKS: When primary mapping fails, use secondary indicators
+4. VALIDATION: Cross-reference extracted data for logical consistency
+
+OUTPUT REQUIREMENTS:
+- Return ONLY valid JSON with exact field structure
+- Ensure all required mapping fields are present
+- Use null for unmapped fields, never omit them
+- Include confidence indicators in your reasoning process`
+          }]
         }
       };
 
