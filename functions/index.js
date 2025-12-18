@@ -380,6 +380,7 @@ function extractProducts(sheetData, mapping, headerRow) {
     const cartonHeightCol = mapping?.cartonHeight?.col;
     
     // Try combined dimension string first (e.g., "25x20x15")
+    let combinedDimensionsFound = false;
     if (cartonLengthCol != null) {
       const dimStr = String(row[cartonLengthCol] || "");
       const dims = dimStr.match(/[\d.]+/g);
@@ -388,14 +389,15 @@ function extractProducts(sheetData, mapping, headerRow) {
         product.cartonWidth = parseFloat(dims[1]) || 0;
         product.cartonHeight = parseFloat(dims[2]) || 0;
         product.cartonSource = mapping.cartonLength.name || "";
+        combinedDimensionsFound = true;
       } else {
         // Single dimension value
         product.cartonLength = parseFloat(dimStr.replace(/[^0-9.-]/g, "")) || 0;
       }
     }
     
-    // Extract individual width/height if mapped separately
-    if (cartonWidthCol != null && cartonWidthCol !== cartonLengthCol) {
+    // Extract individual width/height if mapped separately AND combined dimensions not found
+    if (!combinedDimensionsFound && cartonWidthCol != null && cartonWidthCol !== cartonLengthCol) {
       const dimStr = String(row[cartonWidthCol] || "");
       const width = parseFloat(dimStr.replace(/[^0-9.-]/g, "")) || 0;
       if (width > 0) {
@@ -403,7 +405,7 @@ function extractProducts(sheetData, mapping, headerRow) {
       }
     }
     
-    if (cartonHeightCol != null && cartonHeightCol !== cartonLengthCol) {
+    if (!combinedDimensionsFound && cartonHeightCol != null && cartonHeightCol !== cartonLengthCol) {
       const dimStr = String(row[cartonHeightCol] || "");
       const height = parseFloat(dimStr.replace(/[^0-9.-]/g, "")) || 0;
       if (height > 0) {
