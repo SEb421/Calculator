@@ -397,12 +397,18 @@ function extractProducts(sheetData, mapping, headerRow) {
     // Extract individual width/height if mapped separately
     if (cartonWidthCol != null && cartonWidthCol !== cartonLengthCol) {
       const dimStr = String(row[cartonWidthCol] || "");
-      product.cartonWidth = parseFloat(dimStr.replace(/[^0-9.-]/g, "")) || 0;
+      const width = parseFloat(dimStr.replace(/[^0-9.-]/g, "")) || 0;
+      if (width > 0) {
+        product.cartonWidth = width;
+      }
     }
     
     if (cartonHeightCol != null && cartonHeightCol !== cartonLengthCol) {
       const dimStr = String(row[cartonHeightCol] || "");
-      product.cartonHeight = parseFloat(dimStr.replace(/[^0-9.-]/g, "")) || 0;
+      const height = parseFloat(dimStr.replace(/[^0-9.-]/g, "")) || 0;
+      if (height > 0) {
+        product.cartonHeight = height;
+      }
     }
 
     // Dims text fallback (safe null check)
