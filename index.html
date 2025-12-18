@@ -2352,6 +2352,44 @@
                 return parseFloat(str.replace(/[^0-9.-]/g, '')) || 0;
             };
 
+            // Currency conversion function
+            const convertCurrency = async (amount, fromCurrency = 'USD', toCurrency = 'GBP') => {
+                if (!currencyConversion.enabled || !amount) return null;
+                
+                try {
+                    // Check if we have cached rates (valid for 1 hour)
+                    const cacheKey = `${fromCurrency}_${toCurrency}`;
+                    const cachedRate = currencyConversion.rates[cacheKey];
+                    const now = Date.now();
+                    
+                    if (cachedRate && (now - cachedRate.timestamp) < 3600000) { // 1 hour cache
+                        return (amount * cachedRate.rate).toFixed(2);
+                    }
+                    
+                    // Fetch new rate from free API
+                    const response = await fetch(`https://api.exchangerate-api.com/v4/latest/${fromCurrency}`);
+                    const data = await response.json();
+                    
+                    if (data.rates && data.rates[toCurrency]) {
+                        const rate = data.rates[toCurrency];
+                        
+                        // Cache the rate
+                        setCurrencyConversion(prev => ({
+                            ...prev,
+                            rates: {
+                                ...prev.rates,
+                                [cacheKey]: { rate, timestamp: now }
+                            }
+                        }));
+                        
+                        return (amount * rate).toFixed(2);
+                    }
+                } catch (error) {
+                    console.error('Currency conversion failed:', error);
+                }
+                return null;
+            };
+
             const toggleStar = (i) => {
                 setStarred(prev => {
                     const next = new Set(prev);
@@ -2747,17 +2785,48 @@
                     await workbook.xlsx.load(arrayBuffer);
                     const worksheet = workbook.worksheets[0];
 
-                    // Extract Images
-                    const images = {}; // row -> blobUrl
-                    worksheet.getImages().forEach(img => {
-                        // ExcelJS Image linkage
-                        // img.range.tl.nativeRow is 0-indexed row number
-                        const rowIdx = Math.floor(img.range.tl.nativeRow) + 1; // 1-based to match our logic later
-                        const imageId = img.imageId;
-                        const imgData = workbook.getImage(imageId);
-                        const blob = new Blob([imgData.buffer], { type: 'image/' + imgData.extension });
-                        images[rowIdx] = URL.createObjectURL(blob);
+                    // Enhanced Image Extraction
+                    const images = {}; // row -> {url, metadata}
+                    const imageMetadata = [];
+                    
+                    console.log("🖼️ Extracting images from Excel file...");
+                    worksheet.getImages().forEach((img, index) => {
+                        try {
+                            // ExcelJS Image linkage with enhanced metadata
+                            const rowIdx = Math.floor(img.range.tl.nativeRow); // 0-based row
+                            const colIdx = Math.floor(img.range.tl.nativeCol); // 0-based column
+                            const imageId = img.imageId;
+                            const imgData = workbook.getImage(imageId);
+                            
+                            // Create blob with proper MIME type
+                            const mimeType = imgData.extension === 'png' ? 'image/png' : 
+                                           imgData.extension === 'jpg' || imgData.extension === 'jpeg' ? 'image/jpeg' :
+                                           imgData.extension === 'gif' ? 'image/gif' : 'image/png';
+                            
+                            const blob = new Blob([imgData.buffer], { type: mimeType });
+                            const imageUrl = URL.createObjectURL(blob);
+                            
+                            // Store with enhanced metadata
+                            const imageInfo = {
+                                url: imageUrl,
+                                row: rowIdx,
+                                col: colIdx,
+                                extension: imgData.extension,
+                                size: imgData.buffer.length,
+                                width: img.range.br.nativeCol - img.range.tl.nativeCol,
+                                height: img.range.br.nativeRow - img.range.tl.nativeRow
+                            };
+                            
+                            images[rowIdx] = imageInfo;
+                            imageMetadata.push(imageInfo);
+                            
+                            console.log(`📸 Image ${index + 1}: Row ${rowIdx}, Col ${colIdx}, Size: ${(imgData.buffer.length / 1024).toFixed(1)}KB`);
+                        } catch (error) {
+                            console.error(`❌ Failed to extract image ${index + 1}:`, error);
+                        }
                     });
+                    
+                    console.log(`✅ Extracted ${imageMetadata.length} images from Excel file`);
 
                     // Convert to JSON for AI (Simple text map)
                     // We stick to simple text for the AI prompt to keep payload small
@@ -2852,11 +2921,54 @@
                             const headerRowIdx = fullResult.originalData?.headerRow || 0;
 
                             const finalProducts = cleanProducts.map((p, i) => {
-                                // Estimate Excel Row: Header + 1 + i
-                                const estExcelRow = headerRowIdx + 1 + 1 + i; // +1 for 1-based, +1 for data start
-                                // Look for image around this row (fuzzy match?)
-                                const imgUrl = images[estExcelRow] || images[estExcelRow - 1] || images[estExcelRow + 1] || null;
-                                return { ...p, image: imgUrl };
+                                // Enhanced Image Association Logic
+                                const estExcelRow = headerRowIdx + 1 + i; // Estimated row in Excel (0-based)
+                                
+                                // Smart image matching with multiple strategies
+                                let imageInfo = null;
+                                
+                                // Strategy 1: Exact row match
+                                if (images[estExcelRow]) {
+                                    imageInfo = images[estExcelRow];
+                                    console.log(`📸 Exact match: Product ${i} -> Row ${estExcelRow}`);
+                                }
+                                // Strategy 2: Adjacent row search (±2 rows)
+                                else {
+                                    for (let offset = -2; offset <= 2; offset++) {
+                                        const checkRow = estExcelRow + offset;
+                                        if (images[checkRow]) {
+                                            imageInfo = images[checkRow];
+                                            console.log(`📸 Adjacent match: Product ${i} -> Row ${checkRow} (offset: ${offset})`);
+                                            break;
+                                        }
+                                    }
+                                }
+                                
+                                // Strategy 3: SKU-based matching (if image filename contains SKU)
+                                if (!imageInfo && p.sku) {
+                                    const matchingImage = imageMetadata.find(img => {
+                                        // Check if any cell in the image's row contains the SKU
+                                        const rowData = simpleRows[img.row] || [];
+                                        return rowData.some(cell => 
+                                            String(cell).toLowerCase().includes(p.sku.toLowerCase())
+                                        );
+                                    });
+                                    if (matchingImage) {
+                                        imageInfo = matchingImage;
+                                        console.log(`📸 SKU match: Product ${p.sku} -> Row ${matchingImage.row}`);
+                                    }
+                                }
+                                
+                                return { 
+                                    ...p, 
+                                    image: imageInfo?.url || null,
+                                    imageMetadata: imageInfo ? {
+                                        row: imageInfo.row,
+                                        col: imageInfo.col,
+                                        size: imageInfo.size,
+                                        extension: imageInfo.extension
+                                    } : null
+                                };
                             });
 
                             setAiProducts(finalProducts);
@@ -3975,21 +4087,40 @@
                                                                 <tr>
                                                                     <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 uppercase">#</th>
                                                                     <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 uppercase">SKU</th>
+                                                                    <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 uppercase min-w-[200px]">Title</th>
                                                                     <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 uppercase">Price</th>
+                                                                    <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 uppercase">GBP</th>
                                                                     <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 uppercase">L×W×H</th>
+                                                                    <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 uppercase">Pack</th>
                                                                     <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 uppercase">Pack</th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                                                                {aiProducts.slice(0, 10).map((p, i) => (
-                                                                    <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                                                                        <td className="px-3 py-2 text-gray-400">{i + 1}</td>
-                                                                        <td className="px-3 py-2 font-medium text-gray-900 dark:text-white truncate max-w-[150px]">{p.sku || '—'}</td>
-                                                                        <td className="px-3 py-2 font-bold text-indigo-600 dark:text-indigo-400">${p.unitPrice?.toFixed(2) || '0.00'}</td>
-                                                                        <td className="px-3 py-2 text-gray-500">{p.length || 0}×{p.width || 0}×{p.height || 0}</td>
-                                                                        <td className="px-3 py-2 text-gray-500">{p.pack || 1}</td>
-                                                                    </tr>
-                                                                ))}
+                                                                {aiProducts.slice(0, 10).map((p, i) => {
+                                                                    const [gbpPrice, setGbpPrice] = useState(null);
+                                                                    
+                                                                    // Convert currency if enabled
+                                                                    useEffect(() => {
+                                                                        if (currencyConversion.enabled && p.unitPrice) {
+                                                                            convertCurrency(p.unitPrice, 'USD', currencyConversion.targetCurrency)
+                                                                                .then(converted => setGbpPrice(converted));
+                                                                        }
+                                                                    }, [p.unitPrice, currencyConversion.enabled]);
+                                                                    
+                                                                    return (
+                                                                        <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                                                            <td className="px-3 py-2 text-gray-400">{i + 1}</td>
+                                                                            <td className="px-3 py-2 font-medium text-gray-900 dark:text-white truncate max-w-[120px]" title={p.sku}>{p.sku || '—'}</td>
+                                                                            <td className="px-3 py-2 text-gray-700 dark:text-gray-300 truncate max-w-[200px]" title={p.title}>{p.title || '—'}</td>
+                                                                            <td className="px-3 py-2 font-bold text-indigo-600 dark:text-indigo-400">${p.unitPrice?.toFixed(2) || '0.00'}</td>
+                                                                            <td className="px-3 py-2 font-medium text-emerald-600 dark:text-emerald-400">
+                                                                                {currencyConversion.enabled && gbpPrice ? `£${gbpPrice}` : '—'}
+                                                                            </td>
+                                                                            <td className="px-3 py-2 text-gray-500">{p.cartonLength || p.productLength || 0}×{p.cartonWidth || p.productWidth || 0}×{p.cartonHeight || p.productHeight || 0}</td>
+                                                                            <td className="px-3 py-2 text-gray-500">{p.pack || 1}</td>
+                                                                        </tr>
+                                                                    );
+                                                                })}
                                                             </tbody>
                                                         </table>
                                                     </div>
@@ -4046,6 +4177,7 @@
             const [g, setG] = useState({ containerType: '40HQ', utilisationPct: '89.5', fxGbpToUsd: '1.30', seaFreightGBP: '2800' });
             const [courierRules, setCourierRules] = useState(DEFAULT_COURIER_RULES);
             const [priceRules, setPriceRules] = useState({ enabled: false, endingsText: '0.49,0.99', allowDown: true, tolerancePct: '1' });
+            const [currencyConversion, setCurrencyConversion] = useState({ enabled: false, targetCurrency: 'GBP', rates: {} });
             const [settingsOpen, setSettingsOpen] = useState(false);
             const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
             const [mobileHeaderVisible, setMobileHeaderVisible] = useState(true);
@@ -4216,6 +4348,48 @@
                                         <div className="pt-4 border-t border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-400">
                                             <div>Preset CBM: {fmt(CONTAINER_CBM[g.containerType] || 76, 2)} m³</div>
                                             <div>Effective CBM: {fmt((CONTAINER_CBM[g.containerType] || 76) * (num(g.utilisationPct) / 100), 2)} m³</div>
+                                        </div>
+
+                                        {/* Currency Conversion Settings */}
+                                        <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
+                                            <div className="flex items-center justify-between mb-4">
+                                                <h3 className="font-bold text-lg">Currency Conversion</h3>
+                                                <label className="relative inline-flex items-center cursor-pointer">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={currencyConversion.enabled} 
+                                                        onChange={(e) => setCurrencyConversion(prev => ({ ...prev, enabled: e.target.checked }))}
+                                                        className="sr-only peer" 
+                                                    />
+                                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                                </label>
+                                            </div>
+                                            {currencyConversion.enabled && (
+                                                <div className="space-y-3">
+                                                    <div>
+                                                        <label className="block text-sm font-medium mb-1.5">Convert to Currency</label>
+                                                        <select 
+                                                            value={currencyConversion.targetCurrency} 
+                                                            onChange={(e) => setCurrencyConversion(prev => ({ ...prev, targetCurrency: e.target.value }))}
+                                                            className="glass-input w-full rounded-xl px-4 py-2.5"
+                                                        >
+                                                            <option value="GBP">GBP (British Pound)</option>
+                                                            <option value="EUR">EUR (Euro)</option>
+                                                            <option value="CAD">CAD (Canadian Dollar)</option>
+                                                            <option value="AUD">AUD (Australian Dollar)</option>
+                                                        </select>
+                                                    </div>
+                                                    <div className="text-xs text-gray-500 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <svg className="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                                                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                                            </svg>
+                                                            <span className="font-medium">Live Exchange Rates</span>
+                                                        </div>
+                                                        <p>Rates are fetched from exchangerate-api.com and cached for 1 hour. Conversion appears in AI upload results.</p>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
 
                                         <div className="pt-6 border-t border-gray-200 dark:border-gray-700">

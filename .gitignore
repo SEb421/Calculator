@@ -33,3 +33,12 @@ Thumbs.db
 
 # Demo zip (large file)
 demo.zip
+
+# Excel files (except examples)
+*.xlsx
+*.xls
+!example*.xlsx
+!example*.xls
+
+# Test files
+test_*.js
