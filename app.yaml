@@ -1,0 +1,21 @@
+runtime: python312
+
+handlers:
+# Serve static files (logos, images)
+- url: /Logos
+  static_dir: Logos
+
+# Serve the main index.html for root
+- url: /
+  static_files: index.html
+  upload: index.html
+
+# Serve other HTML files
+- url: /(.+\.html)
+  static_files: \1
+  upload: .*\.html
+
+# Catch-all for the SPA
+- url: /.*
+  static_files: index.html
+  upload: index.html

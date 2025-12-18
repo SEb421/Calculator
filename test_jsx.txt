@@ -1,0 +1,5 @@
+﻿                    </div>
+                </div>
+
+                    {/* iOS 25 Style Sticky Target Sell - DESKTOP ONLY */}
+                    <div className={`hidden md:block fixed top-6 left-1/2 -translate-x-1/2 z-40 max-w-[calc(100%-2rem)] transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] ${stickyVisible ? 'translate-y-0 opacity-100' : '-translate-y-32 opacity-0 pointer-events-none'}`}>

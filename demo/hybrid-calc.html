@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Hybrid Liquid Calculator</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            justify-content: space-between;
+            padding: 40px;
+            box-sizing: border-box;
+            color: rgba(255, 255, 255, 0.8);
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-size: 12px;
+        }
+
+        .label {
+            margin-top: auto;
+        }
+
+        .center-label {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        #profit-display {
+            font-size: 24px;
+            font-weight: 700;
+            color: #fff;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+</head>
+
+<body>
+    <div class="ui-layer">
+        <div class="label" style="color: #FF6B6B;">Cost Price</div>
+
+        <div class="center-label">
+            <div>Profit</div>
+            <div id="profit-display">$0</div>
+        </div>
+
+        <div class="label" style="color: #4ECDC4; text-align: right;">Sell Price</div>
+    </div>
+
+    <script id="vertexShader" type="x-shader/x-vertex">
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = vec4(position, 1.0);
+        }
+    </script>
+
+    <script id="fragmentShader" type="x-shader/x-fragment">
+        precision highp float;
+        
+        uniform float uTime;
+        uniform vec2 uResolution;
+        uniform vec2 uMouse;
+        
+        // Calculator State
+        uniform float uCost;   // 0.0 - 1.0
+        uniform float uSell;   // 0.0 - 1.0
+        uniform float uProfit; // -1.0 - 1.0 (Derived)
+        
+        varying vec2 vUv;
+
+        // --- SDF FUNCTIONS ---
+        float sdRoundedBox(vec2 p, vec2 b, float r) {
+            vec2 q = abs(p) - b + r;
+            return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - r;
+        }
+        float sdCircle(vec2 p, float r) { return length(p) - r; }
+        float smin(float a, float b, float k) {
+            float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+            return mix(b, a, h) - k * h * (1.0 - h);
+        }
+
+        // --- SCENE MAP ---
+        // Returns vec3(distance, material_id, value)
+        // Material ID: 1=GlassBase, 2=RedLiquid, 3=GreenLiquid, 4=ProfitBlob
+        vec3 map(vec2 p) {
+            float d = 100.0;
+            float mat = 0.0;
+            float val = 0.0;
+
+            // 1. Cost Slider (Left) - Red
+            vec2 pCostBase = p - vec2(-0.6, 0.0);
+            float trackL = sdRoundedBox(pCostBase, vec2(0.12, 0.6), 0.12);
+            
+            // Cost Liquid Fill
+            // Remap 0..1 to Y position
+            float costY = -0.5 + uCost * 1.0; 
+            vec2 pCostBlob = pCostBase - vec2(0.0, costY);
+            float blobL = sdCircle(pCostBlob, 0.15); // The Knob
+            
+            // Merge Track & Knob
+            float costShape = smin(trackL, blobL, 0.2);
+            
+            // 2. Sell Slider (Right) - Green
+            vec2 pSellBase = p - vec2(0.6, 0.0);
+            float trackR = sdRoundedBox(pSellBase, vec2(0.12, 0.6), 0.12);
+            
+            float sellY = -0.5 + uSell * 1.0;
+            vec2 pSellBlob = pSellBase - vec2(0.0, sellY);
+            float blobR = sdCircle(pSellBlob, 0.15);
+            
+            float sellShape = smin(trackR, blobR, 0.2);
+            
+            // 3. Profit Orb (Center)
+            // Size depends on Profit magnitude
+            // Position wobbles slightly with time
+            float profitSize = 0.2 + abs(uProfit) * 0.4;
+            vec2 pProfit = p - vec2(0.0, sin(uTime)*0.05); 
+            float profitOrb = sdCircle(pProfit, profitSize);
+            
+            // --- FLUID MERGING ---
+            // If sliders get close to profit orb, they merge (Hybrid Fluidity)
+            // But we keep track of ID by checking min distance *before* merge or assume proximity
+            
+            // Logic: Calculate min distance to each component
+            float dCost = costShape;
+            float dSell = sellShape;
+            float dProfit = profitOrb;
+            
+            // Smooth Union Everything
+            float overall = smin(dCost, dSell, 0.4); // Very liquid merge
+            overall = smin(overall, dProfit, 0.4);
+            
+            d = overall;
+            
+            // Determine Material blending
+            // We use simple inverse distance weighting for color blend
+            float wCost = 1.0 / (abs(dCost) + 0.01);
+            float wSell = 1.0 / (abs(dSell) + 0.01);
+            float wProfit = 1.0 / (abs(dProfit) + 0.01);
+            
+            // Normalize weights
+            float sumW = wCost + wSell + wProfit;
+            // Store weights in mat/val channel (hacky packing)
+            // Actually, better to compute color in main() based on positions
+            // Just return d
+            
+            return vec3(d, 0.0, 0.0); 
+        }
+
+        // Helper to get color mix
+        vec3 getLiquidColor(vec2 p) {
+            // Re-eval distances for coloring
+            float costY = -0.5 + uCost * 1.0; 
+            vec2 pCost = p - vec2(-0.6, costY);
+            float dCost = length(pCost); // Approx dist to blob center
+            
+            float sellY = -0.5 + uSell * 1.0;
+            vec2 pSell = p - vec2(0.6, sellY);
+            float dSell = length(pSell);
+            
+            float dProfit = length(p); // Center
+            
+            // Color Palettes
+            vec3 colCost = vec3(1.0, 0.2, 0.3); // Red/Pink
+            vec3 colSell = vec3(0.2, 0.9, 0.6); // Teal/Green
+            
+            // Profit Color: Transitions Red -> Gold -> Green
+            vec3 colProfitNeg = vec3(1.0, 0.1, 0.1);
+            vec3 colProfitPos = vec3(0.2, 1.0, 0.4);
+            vec3 colProfit = mix(colProfitNeg, colProfitPos, step(0.0, uProfit));
+            if (uProfit > 0.5) colProfit = vec3(1.0, 0.8, 0.2); // Gold for high profit
+            
+            // Blend based on proximity
+            float wCost = 1.0 / pow(dCost + 0.1, 2.0);
+            float wSell = 1.0 / pow(dSell + 0.1, 2.0);
+            float wProfit = 1.0 / pow(dProfit + 0.1, 2.0) * 1.5; // Bias center
+            
+            vec3 finalCol = (colCost * wCost + colSell * wSell + colProfit * wProfit) / (wCost + wSell + wProfit);
+            return finalCol;
+        }
+
+        // --- BACKGROUND ---
+        vec3 getBackground(vec2 uv) {
+            float t = uTime * 0.1;
+            vec3 col = vec3(0.05);
+            // Aurora
+            col += vec3(0.0, 0.2, 0.5) * smoothstep(1.0, 0.0, length(uv - vec2(sin(t), cos(t))));
+            col += vec3(0.5, 0.0, 0.2) * smoothstep(1.0, 0.0, length(uv - vec2(cos(t*0.7), sin(t*0.8))));
+            return col;
+        }
+
+        void main() {
+            vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution.xy) / uResolution.y;
+            vec2 mouse = (uMouse - 0.5 * uResolution.xy) / uResolution.y;
+
+            // --- GEOMETRY ---
+            vec3 res = map(uv);
+            float d = res.x;
+            
+            // --- NORMAL ---
+            vec2 eps = vec2(0.001, 0.0);
+            vec2 grad = vec2(
+                map(uv + eps.xy).x - map(uv - eps.xy).x,
+                map(uv + eps.yx).x - map(uv - eps.yx).x
+            );
+            vec2 normal2D = normalize(grad);
+            float z = sqrt(clamp(1.0 - dot(normal2D, normal2D), 0.0, 1.0));
+            vec3 normal = normalize(vec3(normal2D, z * 0.5));
+
+            // --- OPTICAL REACTOR ---
+            vec2 lightDelta = mouse - uv;
+            vec3 lightDir = normalize(vec3(lightDelta, 0.5));
+            vec3 tangent = normalize(vec3(-normal.y, normal.x, 0.0));
+            
+            float dotLT = dot(lightDir, tangent);
+            float shine = sin(dotLT * 15.0 + uTime*2.0) * 0.5 + 0.5;
+            float edgeMask = smoothstep(0.02, 0.0, abs(d)); 
+            float lightProx = smoothstep(1.5, 0.0, length(lightDelta));
+
+            // --- RENDER ---
+            vec3 col = getBackground(uv);
+            
+            if (d < 0.0) {
+                // Liquid Glass Material
+                vec3 liquidBase = getLiquidColor(uv);
+                
+                // 1. Refraction (Distortion)
+                vec2 refractOff = normal2D * 0.1;
+                vec3 bgRefract = getBackground(uv + refractOff);
+                
+                // 2. Mix Liquid Color + Glass
+                // ChatGPT blobs are matte/emissive, Apple is glass.
+                // Hybrid: Tinted Glass with internal glow.
+                
+                // Internal Glow (Fresnel-ish)
+                float internalGlow = pow(1.0 - z, 3.0);
+                
+                col = mix(bgRefract, liquidBase, 0.6); // 60% Liquid Color, 40% Transparent
+                col += liquidBase * internalGlow * 0.8; // Emissive edges
+                
+                // 3. Specular Highlight
+                vec3 viewDir = vec3(0.0, 0.0, 1.0);
+                vec3 halfVec = normalize(lightDir + viewDir);
+                float spec = pow(max(dot(normal, halfVec), 0.0), 30.0);
+                col += spec * 0.5;
+            }
+            
+            // Add Optical Reactor Rim
+            col += edgeMask * shine * lightProx * vec3(1.0);
+            
+            gl_FragColor = vec4(col, 1.0);
+        }
+    </script>
+
+    <script>
+        const scene = new THREE.Scene();
+        const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const uniforms = {
+            uTime: { value: 0 },
+            uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+            uMouse: { value: new THREE.Vector2(0, 0) },
+            uCost: { value: 0.3 },
+            uSell: { value: 0.7 },
+            uProfit: { value: 0.4 }
+        };
+
+        const material = new THREE.ShaderMaterial({
+            vertexShader: document.getElementById('vertexShader').textContent,
+            fragmentShader: document.getElementById('fragmentShader').textContent,
+            uniforms: uniforms
+        });
+
+        scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material));
+
+        // --- GAMEPLAY LOGIC ---
+        let isDraggingCost = false;
+        let isDraggingSell = false;
+
+        function updateProfit() {
+            const cost = uniforms.uCost.value * 100;
+            const sell = uniforms.uSell.value * 100;
+            const profit = sell - cost;
+
+            // Normalize for shader (-1 to 1 range approx)
+            uniforms.uProfit.value = profit / 100.0;
+
+            // Update Text
+            const profitEl = document.getElementById('profit-display');
+            profitEl.innerText = `$${profit.toFixed(0)}`;
+            if (profit > 0) profitEl.style.color = '#4ECDC4'; // Green/Teal
+            else if (profit < 0) profitEl.style.color = '#FF6B6B'; // Red
+            else profitEl.style.color = '#fff';
+        }
+
+        function handleInput(x, y) {
+            const ndcX = (x / window.innerWidth) * 2 - 1;
+            const ndcY = 1 - (y / window.innerHeight) * 2; // -1 (bottom) to 1 (top)
+
+            // Input Zones (Screen space)
+            // Left 30% = Cost, Right 30% = Sell
+            const zoneX = x / window.innerWidth;
+
+            if (zoneX < 0.3) isDraggingCost = true;
+            else if (zoneX > 0.7) isDraggingSell = true;
+
+            // Update Values logic
+            // Map Y (-1..1) to 0..1 range with clamps
+            const val = Math.max(0, Math.min(1, (ndcY + 0.8) / 1.6)); // Approx UI area
+
+            if (isDraggingCost) uniforms.uCost.value = val;
+            if (isDraggingSell) uniforms.uSell.value = val;
+
+            if (isDraggingCost || isDraggingSell) updateProfit();
+        }
+
+        window.addEventListener('mousedown', e => handleInput(e.clientX, e.clientY));
+        window.addEventListener('mousemove', e => {
+            uniforms.uMouse.value.x = e.clientX;
+            uniforms.uMouse.value.y = window.innerHeight - e.clientY;
+
+            if (e.buttons === 1) handleInput(e.clientX, e.clientY);
+        });
+        window.addEventListener('mouseup', () => { isDraggingCost = false; isDraggingSell = false; });
+
+        // Touch
+        window.addEventListener('touchmove', e => {
+            e.preventDefault();
+            if (e.touches.length > 0) {
+                const t = e.touches[0];
+                uniforms.uMouse.value.x = t.clientX;
+                uniforms.uMouse.value.y = window.innerHeight - t.clientY;
+                handleInput(t.clientX, t.clientY);
+            }
+        }, { passive: false });
+        window.addEventListener('touchstart', e => {
+            if (e.touches.length > 0) handleInput(e.touches[0].clientX, e.touches[0].clientY);
+        });
+        window.addEventListener('touchend', () => { isDraggingCost = false; isDraggingSell = false; });
+
+        window.addEventListener('resize', () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
+        });
+
+        // Animation
+        const startTime = Date.now();
+        function animate() {
+            requestAnimationFrame(animate);
+            uniforms.uTime.value = (Date.now() - startTime) * 0.001;
+            renderer.render(scene, camera);
+        }
+        animate();
+        updateProfit(); // Init text
+    </script>
+</body>
+
+</html>

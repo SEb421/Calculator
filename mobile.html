@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <title>LandedCalc - Mobile</title>
+
+    <!-- React -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        /* ========================================
+           iOS 26 LIQUID GLASS DESIGN SYSTEM
+           ======================================== */
+
+        :root {
+            /* Light Mode Colors */
+            --bg-primary: #f2f2f7;
+            --bg-secondary: #ffffff;
+
+            /* Glass Materials */
+            --glass-bg: rgba(255, 255, 255, 0.72);
+            --glass-bg-thick: rgba(255, 255, 255, 0.85);
+            --glass-border: rgba(255, 255, 255, 0.5);
+            --glass-shadow: rgba(0, 0, 0, 0.08);
+
+            /* Typography */
+            --text-primary: #1c1c1e;
+            --text-secondary: rgba(60, 60, 67, 0.6);
+            --text-tertiary: rgba(60, 60, 67, 0.3);
+
+            /* Semantic Colors */
+            --tint-blue: #007aff;
+            --tint-green: #34c759;
+            --tint-orange: #ff9500;
+            --tint-red: #ff3b30;
+
+            /* Spacing (8pt grid) */
+            --space-xs: 4px;
+            --space-sm: 8px;
+            --space-md: 16px;
+            --space-lg: 24px;
+            --space-xl: 32px;
+
+            /* Radius */
+            --radius-sm: 10px;
+            --radius-md: 14px;
+            --radius-lg: 20px;
+            --radius-xl: 28px;
+            --radius-pill: 100px;
+
+            /* Blur */
+            --blur-standard: blur(40px) saturate(180%);
+            --blur-thick: blur(60px) saturate(200%);
+        }
+
+        .dark {
+            --bg-primary: #000000;
+            --bg-secondary: #1c1c1e;
+
+            --glass-bg: rgba(28, 28, 30, 0.75);
+            --glass-bg-thick: rgba(28, 28, 30, 0.88);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-shadow: rgba(0, 0, 0, 0.3);
+
+            --text-primary: #ffffff;
+            --text-secondary: rgba(235, 235, 245, 0.6);
+            --text-tertiary: rgba(235, 235, 245, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html,
+        body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* App Container */
+        #root {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ========================================
+           LIQUID GLASS COMPONENTS
+           ======================================== */
+
+        .glass {
+            background: var(--glass-bg);
+            backdrop-filter: var(--blur-standard);
+            -webkit-backdrop-filter: var(--blur-standard);
+            border: 0.5px solid var(--glass-border);
+            box-shadow:
+                0 8px 32px var(--glass-shadow),
+                inset 0 0.5px 0 rgba(255, 255, 255, 0.4);
+        }
+
+        .glass-thick {
+            background: var(--glass-bg-thick);
+            backdrop-filter: var(--blur-thick);
+            -webkit-backdrop-filter: var(--blur-thick);
+            border: 0.5px solid var(--glass-border);
+            box-shadow:
+                0 12px 40px var(--glass-shadow),
+                inset 0 0.5px 0 rgba(255, 255, 255, 0.3);
+        }
+
+        /* ========================================
+           FLOATING TOP NAVIGATION
+           ======================================== */
+
+        .nav-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: env(safe-area-inset-top, 12px) var(--space-md) var(--space-sm);
+        }
+
+        .nav-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-sm) var(--space-md);
+            border-radius: var(--radius-xl);
+        }
+
+        .nav-title {
+            font-size: 17px;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+
+        .nav-button {
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius-md);
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .nav-button:active {
+            background: rgba(0, 0, 0, 0.05);
+        }
+
+        .dark .nav-button:active {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        /* ========================================
+           MAIN CONTENT AREA
+           ======================================== */
+
+        .main-content {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+            padding: calc(72px + env(safe-area-inset-top, 0px)) var(--space-md) calc(100px + env(safe-area-inset-bottom, 0px));
+        }
+
+        /* ========================================
+           HERO PRICE SECTION
+           ======================================== */
+
+        .hero-section {
+            text-align: center;
+            padding: var(--space-xl) 0;
+        }
+
+        .hero-label {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: var(--space-sm);
+        }
+
+        .hero-price {
+            font-size: 72px;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            line-height: 1;
+            margin-bottom: var(--space-md);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .hero-margin {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-sm);
+            padding: var(--space-sm) var(--space-md);
+            border-radius: var(--radius-pill);
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        .hero-margin.positive {
+            background: rgba(52, 199, 89, 0.12);
+            color: var(--tint-green);
+        }
+
+        .hero-margin.negative {
+            background: rgba(255, 59, 48, 0.12);
+            color: var(--tint-red);
+        }
+
+        /* ========================================
+           GLASS CARDS
+           ======================================== */
+
+        .card {
+            border-radius: var(--radius-lg);
+            padding: var(--space-lg);
+            margin-bottom: var(--space-md);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            margin-bottom: var(--space-md);
+        }
+
+        .card-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 122, 255, 0.1);
+            color: var(--tint-blue);
+        }
+
+        .card-title {
+            font-size: 17px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+        }
+
+        /* ========================================
+           INPUT ROWS (iOS Settings style)
+           ======================================== */
+
+        .input-group {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+
+        .input-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 52px;
+            padding: 0 var(--space-md);
+            border-bottom: 0.5px solid rgba(60, 60, 67, 0.1);
+        }
+
+        .dark .input-row {
+            border-bottom-color: rgba(255, 255, 255, 0.08);
+        }
+
+        .input-row:last-child {
+            border-bottom: none;
+        }
+
+        .input-label {
+            font-size: 17px;
+            color: var(--text-primary);
+        }
+
+        .input-field {
+            flex: 1;
+            max-width: 140px;
+            text-align: right;
+            font-size: 17px;
+            font-weight: 500;
+            color: var(--text-primary);
+            background: transparent;
+            border: none;
+            outline: none;
+            font-family: inherit;
+            padding: var(--space-md) 0;
+        }
+
+        .input-field::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        /* Dimensions row */
+        .dims-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: var(--space-sm);
+            padding: var(--space-md);
+        }
+
+        .dim-input {
+            text-align: center;
+            font-size: 17px;
+            font-weight: 500;
+            padding: var(--space-sm) var(--space-sm);
+            background: rgba(118, 118, 128, 0.08);
+            border: none;
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            outline: none;
+            font-family: inherit;
+        }
+
+        .dim-input::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        /* ========================================
+           RESULT CARDS (Grid)
+           ======================================== */
+
+        .result-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-sm);
+            margin-top: var(--space-md);
+        }
+
+        .result-card {
+            padding: var(--space-md);
+            border-radius: var(--radius-md);
+            text-align: center;
+        }
+
+        .result-label {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: var(--space-xs);
+        }
+
+        .result-value {
+            font-size: 24px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .result-card.profit .result-value {
+            color: var(--tint-green);
+        }
+
+        .result-card.shipping .result-value {
+            color: var(--tint-orange);
+        }
+
+        /* Full-width shipping card */
+        .shipping-card {
+            grid-column: span 2;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-md) var(--space-lg);
+        }
+
+        .shipping-info {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+        }
+
+        .shipping-logo {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius-sm);
+            background: var(--bg-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .shipping-logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .shipping-name {
+            font-size: 17px;
+            font-weight: 600;
+        }
+
+        .shipping-service {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .shipping-price {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--tint-orange);
+        }
+
+        /* ========================================
+           MARGIN SELECTOR (Segmented Control)
+           ======================================== */
+
+        .margin-selector {
+            display: flex;
+            background: rgba(118, 118, 128, 0.12);
+            border-radius: var(--radius-sm);
+            padding: 2px;
+            margin-top: var(--space-md);
+        }
+
+        .margin-option {
+            flex: 1;
+            padding: var(--space-sm) var(--space-md);
+            min-height: 44px;
+            border: none;
+            background: transparent;
+            border-radius: calc(var(--radius-sm) - 2px);
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .margin-option.active {
+            background: var(--bg-secondary);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .dark .margin-option.active {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        /* ========================================
+           FLOATING BOTTOM TAB BAR
+           ======================================== */
+
+        .tab-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: var(--space-md);
+            padding-bottom: max(var(--space-md), env(safe-area-inset-bottom, 8px));
+        }
+
+        .tab-bar-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-xl);
+            padding: var(--space-sm) var(--space-xl);
+            border-radius: var(--radius-pill);
+            max-width: 280px;
+            margin: 0 auto;
+        }
+
+        .tab-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            padding: var(--space-sm) var(--space-lg);
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            border-radius: var(--radius-md);
+            transition: all 0.2s;
+            min-width: 80px;
+        }
+
+        .tab-icon {
+            width: 24px;
+            height: 24px;
+            color: var(--text-secondary);
+            transition: color 0.2s;
+        }
+
+        .tab-label {
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            transition: color 0.2s;
+        }
+
+        .tab-item.active .tab-icon,
+        .tab-item.active .tab-label {
+            color: var(--tint-blue);
+        }
+
+        /* ========================================
+           SETTINGS MODAL
+           ======================================== */
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.4);
+            z-index: 200;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .modal-content {
+            width: 100%;
+            max-height: 90vh;
+            border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+            padding: var(--space-lg);
+            padding-bottom: max(var(--space-lg), env(safe-area-inset-bottom));
+            animation: slideUp 0.3s ease-out;
+            overflow-y: auto;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(100%);
+            }
+
+            to {
+                transform: translateY(0);
+            }
+        }
+
+        .modal-handle {
+            width: 36px;
+            height: 5px;
+            background: rgba(60, 60, 67, 0.3);
+            border-radius: 3px;
+            margin: 0 auto var(--space-lg);
+        }
+
+        .modal-title {
+            font-size: 22px;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: var(--space-lg);
+        }
+
+        /* ========================================
+           AURORA BACKGROUND (Subtle)
+           ======================================== */
+
+        .aurora {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: -1;
+            background:
+                radial-gradient(ellipse 80% 50% at 20% 20%, rgba(0, 122, 255, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse 60% 40% at 80% 30%, rgba(175, 82, 222, 0.06) 0%, transparent 40%),
+                radial-gradient(ellipse 70% 50% at 50% 90%, rgba(52, 199, 89, 0.05) 0%, transparent 40%),
+                var(--bg-primary);
+        }
+
+        .dark .aurora {
+            background:
+                radial-gradient(ellipse 80% 50% at 20% 20%, rgba(0, 122, 255, 0.12) 0%, transparent 50%),
+                radial-gradient(ellipse 60% 40% at 80% 30%, rgba(175, 82, 222, 0.1) 0%, transparent 40%),
+                radial-gradient(ellipse 70% 50% at 50% 90%, rgba(52, 199, 89, 0.08) 0%, transparent 40%),
+                var(--bg-primary);
+        }
+    </style>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect, useRef, memo, useCallback } = React;
+
+        // ========================================
+        // CONSTANTS & UTILITIES
+        // ========================================
+
+        const CONTAINER_CBM = { "40HQ": 76, "40GP": 67.5, "20GP": 33.2 };
+        const VAT_RATE = 0.20;
+
+        const DEFAULT_COURIER_RULES = [
+            { id: 'evri_packet', name: 'Evri / Packet', maxL: 120, maxGirth: 225, maxWeight: 2, maxVol: 40, price: 1.85, days: '2-3', logo: 'Logos/evri_logo_png.png' },
+            { id: 'evri_packet_large', name: 'Evri / Packet over 40L', maxL: 120, maxGirth: 225, maxWeight: 2, minVol: 40, price: 2.25, days: '2-3', logo: 'Logos/evri_logo_png.png' },
+            { id: 'evri_parcel', name: 'Evri / Parcel', maxL: 120, maxGirth: 225, maxWeight: 15, price: 2.33, days: '2-3', logo: 'Logos/evri_logo_png.png' },
+            { id: 'yodel_express', name: 'Yodel / Express', maxL: 90, maxVolCm3: 110000, maxWeight: 17, price: 2.30, days: '1-2', logo: 'Logos/Yodel_logo.png' },
+            { id: 'dpd_48', name: 'DPD / 48 Hour', maxL: 120, maxW: 70, maxH: 60, maxWeight: 30, price: 4.51, days: '1-2', logo: 'Logos/DPD_logo(red)2015.png' },
+            { id: 'pf_48', name: 'Parcelforce / 48 Hour', maxL: 150, maxGirth: 300, maxWeight: 30, price: 5.40, days: '1-2', logo: 'Logos/Parcel Force Logo.png' },
+            { id: 'evri_ll', name: 'Evri / L&L', maxL: 180, maxGirth: 380, maxWeight: 30, price: 8.00, days: '3-5', logo: 'Logos/evri_logo_png.png' },
+            { id: 'dx_std', name: 'DX / Standard', maxL: 150, maxWeight: 30, price: 5.40, days: '2-3', logo: 'Logos/DX Standard Lengths.png' },
+            { id: 'dx_len', name: 'DX / Lengths', maxL: 200, maxWeight: 30, price: 12.21, days: '2-3', logo: 'Logos/DX Standard Lengths.png' }
+        ];
+
+        const num = (n) => {
+            const x = typeof n === "string" ? parseFloat(n) : n;
+            return Number.isFinite(x) ? x : 0;
+        };
+
+        const money = (n) => `£${Number(n || 0).toFixed(2)}`;
+        const cbm = (L, W, H) => (num(L) / 100) * (num(W) / 100) * (num(H) / 100);
+
+        const vatComponent = (sellIncVat) => sellIncVat - sellIncVat / (1 + VAT_RATE);
+
+        const requiredSellForMargin = (targetMarginPct, purchaseInc, commissionPct, ppCost, ppCharged) => {
+            const M = Math.max(0, Math.min(0.99, targetMarginPct / 100));
+            const comm = Math.max(0, commissionPct) / 100;
+            const numer = purchaseInc + Math.max(0, ppCost) - Math.max(0, ppCharged);
+            const denom = 1 - M - comm - (VAT_RATE / (1 + VAT_RATE));
+            if (denom <= 0) return NaN;
+            return numer / denom;
+        };
+
+        const computeProfit = (sellIncVat, purchaseInc, commissionPct, ppCost, ppCharged) => {
+            const comm = Math.max(0, commissionPct) / 100;
+            const commission = sellIncVat * comm;
+            const totalCost = purchaseInc + vatComponent(sellIncVat) + commission + Math.max(0, ppCost) - Math.max(0, ppCharged);
+            return sellIncVat - totalCost;
+        };
+
+        function chooseCourier(l, w, h, weightKg, rules = DEFAULT_COURIER_RULES) {
+            const L = Math.max(0, l | 0), W = Math.max(0, w | 0), H = Math.max(0, h | 0);
+            const weight = Math.max(0, Number(weightKg || 0));
+            const volumeCm3 = L * W * H;
+            const volumeL = volumeCm3 / 1000;
+            const girth = L + 2 * (W + H);
+            const volKg = volumeCm3 / 5000;
+
+            const fits = [];
+            for (const r of rules) {
+                let ok = true;
+                if (r.maxL && L > r.maxL) ok = false;
+                if (r.maxW && W > r.maxW) ok = false;
+                if (r.maxH && H > r.maxH) ok = false;
+                if (r.maxGirth && girth > r.maxGirth) ok = false;
+                if (r.maxWeight && weight > r.maxWeight) ok = false;
+                if (r.maxVol && volumeL > r.maxVol) ok = false;
+                if (r.minVol && volumeL <= r.minVol) ok = false;
+                if (r.maxVolCm3 && volumeCm3 > r.maxVolCm3) ok = false;
+
+                if (ok) {
+                    fits.push({
+                        carrier: r.name.split('/')[0].trim(),
+                        service: r.name.split('/')[1]?.trim() || '',
+                        cost: r.price,
+                        logo: r.logo,
+                        days: r.days || '2-3'
+                    });
+                }
+            }
+
+            if (fits.length === 0) return null;
+            fits.sort((a, b) => a.cost - b.cost);
+            return fits[0];
+        }
+
+        // ========================================
+        // ICONS (SF Symbols style)
+        // ========================================
+
+        const Icons = {
+            Settings: () => (
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+            ),
+            Moon: () => (
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                </svg>
+            ),
+            Sun: () => (
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                </svg>
+            ),
+            Calculator: () => (
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="4" y="2" width="16" height="20" rx="2" /><line x1="8" y1="6" x2="16" y2="6" /><line x1="8" y1="10" x2="16" y2="10" /><line x1="8" y1="14" x2="10" y2="14" /><line x1="14" y1="14" x2="16" y2="14" /><line x1="8" y1="18" x2="10" y2="18" /><line x1="14" y1="18" x2="16" y2="18" />
+                </svg>
+            ),
+            Truck: () => (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="1" y="3" width="15" height="13" /><polygon points="16 8 20 8 23 11 23 16 16 16 16 8" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" />
+                </svg>
+            ),
+            Package: () => (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="16.5" y1="9.4" x2="7.5" y2="4.21" /><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" />
+                </svg>
+            )
+        };
+
+        // ========================================
+        // STABLE INPUT COMPONENT
+        // ========================================
+
+        const StableInput = memo(function StableInput({ value, onValue, className, ...rest }) {
+            const ref = useRef(null);
+            const focusedRef = useRef(false);
+
+            useEffect(() => {
+                if (!focusedRef.current && ref.current && ref.current.value !== (value ?? "")) {
+                    ref.current.value = value ?? "";
+                }
+            }, [value]);
+
+            return (
+                <input
+                    {...rest}
+                    ref={ref}
+                    defaultValue={value}
+                    type={rest.type || "text"}
+                    inputMode={rest.inputMode || "decimal"}
+                    autoComplete="off"
+                    className={className}
+                    onFocus={() => { focusedRef.current = true; }}
+                    onBlur={(e) => {
+                        focusedRef.current = false;
+                        onValue(e.currentTarget.value);
+                    }}
+                />
+            );
+        });
+
+        // ========================================
+        // THEME PROVIDER
+        // ========================================
+
+        const ThemeContext = React.createContext();
+        const useTheme = () => React.useContext(ThemeContext);
+
+        function ThemeProvider({ children }) {
+            const [theme, setTheme] = useState(() =>
+                localStorage.getItem('theme') || 'light'
+            );
+
+            useEffect(() => {
+                document.documentElement.classList.toggle('dark', theme === 'dark');
+                localStorage.setItem('theme', theme);
+            }, [theme]);
+
+            const toggle = () => setTheme(t => t === 'light' ? 'dark' : 'light');
+
+            return (
+                <ThemeContext.Provider value={{ theme, toggle }}>
+                    {children}
+                </ThemeContext.Provider>
+            );
+        }
+
+        // ========================================
+        // SETTINGS MODAL
+        // ========================================
+
+        function SettingsModal({ isOpen, onClose, settings, setSettings }) {
+            if (!isOpen) return null;
+
+            return (
+                <div className="modal-overlay" onClick={onClose}>
+                    <div className="modal-content glass-thick" onClick={e => e.stopPropagation()}>
+                        <div className="modal-handle"></div>
+                        <h2 className="modal-title">Settings</h2>
+
+                        <div className="input-group">
+                            <div className="input-row">
+                                <span className="input-label">Container Type</span>
+                                <select
+                                    value={settings.containerType}
+                                    onChange={e => setSettings(s => ({ ...s, containerType: e.target.value }))}
+                                    className="input-field"
+                                    style={{ textAlignLast: 'right' }}
+                                >
+                                    <option value="40HQ">40HQ</option>
+                                    <option value="40GP">40GP</option>
+                                    <option value="20GP">20GP</option>
+                                </select>
+                            </div>
+                            <div className="input-row">
+                                <span className="input-label">Container Fill %</span>
+                                <StableInput
+                                    value={settings.utilisationPct}
+                                    onValue={v => setSettings(s => ({ ...s, utilisationPct: v }))}
+                                    className="input-field"
+                                    placeholder="95"
+                                />
+                            </div>
+                            <div className="input-row">
+                                <span className="input-label">FX Rate (GBP→USD)</span>
+                                <StableInput
+                                    value={settings.fxGbpToUsd}
+                                    onValue={v => setSettings(s => ({ ...s, fxGbpToUsd: v }))}
+                                    className="input-field"
+                                    placeholder="1.28"
+                                />
+                            </div>
+                            <div className="input-row">
+                                <span className="input-label">Sea Freight (£)</span>
+                                <StableInput
+                                    value={settings.seaFreightGBP}
+                                    onValue={v => setSettings(s => ({ ...s, seaFreightGBP: v }))}
+                                    className="input-field"
+                                    placeholder="1200"
+                                />
+                            </div>
+                            <div className="input-row">
+                                <span className="input-label">Commission %</span>
+                                <StableInput
+                                    value={settings.commissionPct}
+                                    onValue={v => setSettings(s => ({ ...s, commissionPct: v }))}
+                                    className="input-field"
+                                    placeholder="15"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ========================================
+        // MAIN CALCULATOR COMPONENT
+        // ========================================
+
+        function Calculator() {
+            const { theme, toggle } = useTheme();
+            const [settingsOpen, setSettingsOpen] = useState(false);
+
+            // Global settings
+            const [settings, setSettings] = useState({
+                containerType: '40HQ',
+                utilisationPct: '95',
+                fxGbpToUsd: '1.28',
+                seaFreightGBP: '1200',
+                commissionPct: '15'
+            });
+
+            // Item state
+            const [s, setS] = useState({
+                unitUSD: '',
+                unitsPerCarton: '1',
+                L: '',
+                W: '',
+                H: '',
+                weightKg: '',
+                targetMarginPct: '25',
+                ppCostGBP: ''
+            });
+
+            // Calculations
+            const cont = CONTAINER_CBM[settings.containerType] || 76;
+            const effCBM = cont * (num(settings.utilisationPct) / 100);
+            const fx = num(settings.fxGbpToUsd);
+            const sea = num(settings.seaFreightGBP);
+
+            const vol = cbm(s.L, s.W, s.H);
+            const pack = Math.max(1, Math.floor(num(s.unitsPerCarton)) || 1);
+
+            let units = 0;
+            if (vol > 0) {
+                const cartonsCount = Math.floor(effCBM / vol);
+                units = cartonsCount * pack;
+            }
+
+            const unitGBP = fx > 0 ? num(s.unitUSD) / fx : 0;
+            const perUnitFreight = units > 0 ? sea / units : 0;
+            const landedUnit = unitGBP + perUnitFreight;
+            const purchaseInc = landedUnit * pack;
+
+            // Courier
+            const courier = useMemo(() =>
+                chooseCourier(num(s.L), num(s.W), num(s.H), num(s.weightKg)),
+                [s.L, s.W, s.H, s.weightKg]
+            );
+
+            const ppCost = num(s.ppCostGBP) || (courier?.cost || 0);
+
+            // Price calculation
+            const requiredSell = requiredSellForMargin(
+                num(s.targetMarginPct),
+                purchaseInc,
+                num(settings.commissionPct),
+                ppCost,
+                0
+            );
+
+            const sell = Number.isFinite(requiredSell) ? requiredSell : 0;
+            const profit = sell > 0 ? computeProfit(sell, purchaseInc, num(settings.commissionPct), ppCost, 0) : 0;
+            const marginPct = sell > 0 ? (profit / sell) * 100 : 0;
+
+            const hasData = num(s.unitUSD) > 0;
+
+            return (
+                <>
+                    {/* Aurora Background */}
+                    <div className="aurora"></div>
+
+                    {/* Top Navigation */}
+                    <nav className="nav-bar">
+                        <div className="nav-content glass">
+                            <button className="nav-button" onClick={toggle}>
+                                {theme === 'dark' ? <Icons.Sun /> : <Icons.Moon />}
+                            </button>
+                            <span className="nav-title">LandedCalc</span>
+                            <button className="nav-button" onClick={() => setSettingsOpen(true)}>
+                                <Icons.Settings />
+                            </button>
+                        </div>
+                    </nav>
+
+                    {/* Main Content */}
+                    <main className="main-content">
+
+                        {/* Hero Price */}
+                        <section className="hero-section">
+                            <div className="hero-label">Target Sell Price</div>
+                            <div className="hero-price">
+                                {hasData ? money(sell) : '—'}
+                            </div>
+                            {hasData && marginPct > 0 && (
+                                <div className={`hero-margin ${marginPct >= 20 ? 'positive' : 'negative'}`}>
+                                    <span>{marginPct.toFixed(1)}% margin</span>
+                                    <span>·</span>
+                                    <span>{money(profit)} profit</span>
+                                </div>
+                            )}
+                        </section>
+
+                        {/* Margin Selector */}
+                        <div className="margin-selector">
+                            {[20, 25, 30].map(m => (
+                                <button
+                                    key={m}
+                                    className={`margin-option ${num(s.targetMarginPct) === m ? 'active' : ''}`}
+                                    onClick={() => setS(prev => ({ ...prev, targetMarginPct: String(m) }))}
+                                >
+                                    {m}%
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Input Card */}
+                        <div className="card glass" style={{ marginTop: 'var(--space-lg)' }}>
+                            <div className="card-header">
+                                <div className="card-icon">
+                                    <Icons.Package />
+                                </div>
+                                <span className="card-title">Item Details</span>
+                            </div>
+
+                            <div className="input-group">
+                                <div className="input-row">
+                                    <span className="input-label">Unit Price (USD)</span>
+                                    <StableInput
+                                        value={s.unitUSD}
+                                        onValue={v => setS(prev => ({ ...prev, unitUSD: v }))}
+                                        className="input-field"
+                                        placeholder="0.00"
+                                        style={{ fontWeight: 600, color: 'var(--tint-blue)' }}
+                                    />
+                                </div>
+                                <div className="input-row">
+                                    <span className="input-label">Items per Carton</span>
+                                    <StableInput
+                                        value={s.unitsPerCarton}
+                                        onValue={v => setS(prev => ({ ...prev, unitsPerCarton: v }))}
+                                        className="input-field"
+                                        placeholder="1"
+                                    />
+                                </div>
+
+                                <div style={{ padding: 'var(--space-sm) var(--space-md)', borderBottom: '0.5px solid rgba(60, 60, 67, 0.1)' }}>
+                                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: 'var(--space-sm)' }}>
+                                        Dimensions (cm)
+                                    </div>
+                                    <div className="dims-row" style={{ padding: 0 }}>
+                                        <StableInput
+                                            value={s.L}
+                                            onValue={v => setS(prev => ({ ...prev, L: v }))}
+                                            className="dim-input"
+                                            placeholder="L"
+                                        />
+                                        <StableInput
+                                            value={s.W}
+                                            onValue={v => setS(prev => ({ ...prev, W: v }))}
+                                            className="dim-input"
+                                            placeholder="W"
+                                        />
+                                        <StableInput
+                                            value={s.H}
+                                            onValue={v => setS(prev => ({ ...prev, H: v }))}
+                                            className="dim-input"
+                                            placeholder="H"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="input-row">
+                                    <span className="input-label">Weight (kg)</span>
+                                    <StableInput
+                                        value={s.weightKg}
+                                        onValue={v => setS(prev => ({ ...prev, weightKg: v }))}
+                                        className="input-field"
+                                        placeholder="0.0"
+                                    />
+                                </div>
+
+                                <div className="input-row">
+                                    <span className="input-label">Outbound Cost (£)</span>
+                                    <StableInput
+                                        value={s.ppCostGBP}
+                                        onValue={v => setS(prev => ({ ...prev, ppCostGBP: v }))}
+                                        className="input-field"
+                                        placeholder={courier ? courier.cost.toFixed(2) : '0.00'}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Results Grid */}
+                        {hasData && (
+                            <div className="result-grid">
+                                <div className="result-card glass">
+                                    <div className="result-label">Landed Cost</div>
+                                    <div className="result-value">{money(purchaseInc)}</div>
+                                </div>
+                                <div className="result-card glass profit">
+                                    <div className="result-label">Profit</div>
+                                    <div className="result-value">+{money(profit)}</div>
+                                </div>
+
+                                {courier && (
+                                    <div className="shipping-card glass">
+                                        <div className="shipping-info">
+                                            <div className="shipping-logo">
+                                                {courier.logo ? (
+                                                    <img src={courier.logo} alt={courier.carrier} onError={e => e.target.style.display = 'none'} />
+                                                ) : (
+                                                    <Icons.Truck />
+                                                )}
+                                            </div>
+                                            <div>
+                                                <div className="shipping-name">{courier.carrier}</div>
+                                                <div className="shipping-service">{courier.service} · {courier.days} days</div>
+                                            </div>
+                                        </div>
+                                        <div className="shipping-price">{money(courier.cost)}</div>
+                                    </div>
+                                )}
+
+                                <div className="result-card glass" style={{ gridColumn: courier ? 'auto' : 'span 2' }}>
+                                    <div className="result-label">Units / 40HQ</div>
+                                    <div className="result-value">{units > 0 ? units.toLocaleString() : '—'}</div>
+                                </div>
+
+                                {!courier && num(s.L) > 0 && (
+                                    <div className="result-card glass">
+                                        <div className="result-label">Shipping</div>
+                                        <div className="result-value" style={{ color: 'var(--text-secondary)' }}>—</div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                    </main>
+
+                    {/* Settings Modal */}
+                    <SettingsModal
+                        isOpen={settingsOpen}
+                        onClose={() => setSettingsOpen(false)}
+                        settings={settings}
+                        setSettings={setSettings}
+                    />
+                </>
+            );
+        }
+
+        // ========================================
+        // RENDER
+        // ========================================
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(
+            <ThemeProvider>
+                <Calculator />
+            </ThemeProvider>
+        );
+    </script>
+</head>
+
+<body>
+    <div id="root"></div>
+</body>
+
+</html>

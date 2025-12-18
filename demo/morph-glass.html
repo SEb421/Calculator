@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>iOS 26 MorphGlass - Real UI Demo</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        .instruction {
+            position: absolute;
+            bottom: 40px;
+            width: 100%;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.6);
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 14px;
+            pointer-events: none;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 500;
+        }
+    </style>
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+
+<body>
+    <div class="instruction">MorphGlass UI • Drag Slider • Interactive Lighting</div>
+
+    <script id="vertexShader" type="x-shader/x-vertex">
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = vec4(position, 1.0);
+        }
+    </script>
+
+    <script id="fragmentShader" type="x-shader/x-fragment">
+        precision highp float;
+        
+        uniform float uTime;
+        uniform vec2 uResolution;
+        uniform vec2 uMouse;
+        uniform float uSliderValue; // 0.0 to 1.0
+        uniform float uPress;       // 0.0 to 1.0
+        
+        varying vec2 vUv;
+
+        // --- SDF FUNCTIONS ---
+        
+        float sdRoundedBox(vec2 p, vec2 b, float r) {
+            vec2 q = abs(p) - b + r;
+            return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - r;
+        }
+        
+        float sdCircle(vec2 p, float r) {
+            return length(p) - r;
+        }
+        
+        // Smooth union
+        float smin(float a, float b, float k) {
+            float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+            return mix(b, a, h) - k * h * (1.0 - h);
+        }
+
+        // --- NOISE ---
+        float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float noise(vec2 p) {
+            vec2 i = floor(p); vec2 f = fract(p);
+            f = f*f*(3.0-2.0*f);
+            return mix(mix(hash(i + vec2(0.0,0.0)), hash(i + vec2(1.0,0.0)), f.x),
+                       mix(hash(i + vec2(0.0,1.0)), hash(i + vec2(1.0,1.0)), f.x), f.y);
+        }
+
+        // --- SCENE MAP ---
+        // Defines the multi-card layout
+        // Returns vec2(distance, material_id)
+        vec2 map(vec2 p) {
+            float d = 100.0;
+            float mat = 0.0; // 0: None, 1: Card, 2: Slider Track, 3: Slider Knob
+            
+            // Interaction deformations
+            float breathe = sin(uTime * 1.5) * 0.005;
+            
+            // 1. Main Content Card (Top)
+            vec2 pCard = p - vec2(0.0, 0.35);
+            // Subtle tilt/morph based on mouse
+            pCard += (uMouse.xy / uResolution.xy - 0.5) * 0.05 * clamp(1.0 - length(pCard)*2.0, 0.0, 1.0);
+            
+            float card = sdRoundedBox(pCard, vec2(0.65, 0.35), 0.08);
+            if(card < d) { d = card; mat = 1.0; }
+            
+            // 2. Slider Track (Bottom)
+            vec2 pTrack = p - vec2(0.0, -0.4);
+            float track = sdRoundedBox(pTrack, vec2(0.65, 0.12), 0.12);
+            
+            // 3. Slider Fill / Knob
+            // Calculate knob position based on value
+            float slideX = -0.53 + uSliderValue * 1.06; // Range within track
+            vec2 pKnob = pTrack - vec2(slideX, 0.0);
+            
+            // Fluid Knob Shape (Liquid Drop)
+            float knob = sdCircle(pKnob, 0.11);
+            
+            // Morph knob into track (Liquid connection)
+            float sliderComp = smin(track, knob, 0.15); // Smooth blend
+            
+            if(sliderComp < d) { d = sliderComp; mat = 2.0; }
+            
+            // 4. Floating Action Button (Bottom Right)
+            // Shows separate glass piece
+            vec2 pFab = p - vec2(0.8, -0.7);
+            float fab = sdCircle(pFab, 0.15 + breathe);
+            
+            // Global Liquid Merge check
+            // If they get close, they merge slightly
+            d = smin(d, fab, 0.05);
+            
+            // Mouse Interaction Blob (The "Finger" pressure)
+            // When pressed, a small invisible attractor pulls geometry
+            if (uPress > 0.01) {
+                 vec2 pMouse = p - ((uMouse.xy / uResolution.xy) * 2.0 - 1.0) * vec2(uResolution.x/uResolution.y, 1.0); 
+                 float pressBlob = sdCircle(pMouse, 0.15);
+                 d = smin(d, pressBlob, 0.2 * uPress);
+            }
+            
+            return vec2(d, mat);
+        }
+
+        // --- BACKGROUND ---
+        vec3 getBackground(vec2 uv) {
+            float t = uTime * 0.15;
+            vec3 col = vec3(0.08); // Darker modern background
+            
+            // Soft shifting aurora mesh
+            vec2 p1 = vec2(sin(t)*0.8, cos(t*0.6)*0.6);
+            float d1 = length(uv - p1);
+            col += vec3(0.0, 0.3, 0.8) * smoothstep(1.5, 0.0, d1) * 0.6;
+            
+            vec2 p2 = vec2(cos(t*0.4)*0.7, sin(t*0.5)*0.7);
+            float d2 = length(uv - p2);
+            col += vec3(0.6, 0.1, 0.4) * smoothstep(1.5, 0.0, d2) * 0.5;
+            
+            // Grain
+            float grain = (hash(uv * 100.0 + t) - 0.5) * 0.05;
+            col += grain;
+            
+            return col;
+        }
+
+        void main() {
+            vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution.xy) / uResolution.y;
+            vec2 mouseUV = (uMouse - 0.5 * uResolution.xy) / uResolution.y;
+            vec2 screenUV = gl_FragCoord.xy / uResolution.xy;
+
+            // --- GEOMETRY ---
+            vec2 res = map(uv);
+            float d = res.x;
+            
+            // --- NORMAL ---
+            vec2 eps = vec2(0.001, 0.0);
+            vec2 grad = vec2(
+                map(uv + eps.xy).x - map(uv - eps.xy).x,
+                map(uv + eps.yx).x - map(uv - eps.yx).x
+            );
+            vec2 normal2D = normalize(grad);
+            float z = sqrt(clamp(1.0 - dot(normal2D, normal2D), 0.0, 1.0));
+            vec3 normal = normalize(vec3(normal2D, z * 0.8)); // Adjust 0.8 for flatness
+
+            // --- OPTICAL REACTOR (ANISOTROPIC LIGHTING) ---
+            vec2 lightDelta = mouseUV - uv;
+            vec3 lightDir = normalize(vec3(lightDelta, 0.8)); // Higher Z = softer light
+            
+            // Tangent for anisotropy
+            vec3 tangent = normalize(vec3(-normal.y, normal.x, 0.0));
+            
+            // Reactor Shine Logic
+            float dotLT = dot(lightDir, tangent);
+            
+            // Directional intensity
+            float shineDir = sin(dotLT * 12.0 - 1.5) * 0.5 + 0.5;
+            // Focus shine on the side facing the mouse
+            float edgeFacing = smoothstep(-0.2, 0.8, dot(normalize(lightDelta), normal2D));
+            
+            // Variable Edge Width (The "Stroke" effect)
+            float strokeWidth = mix(0.004, 0.015, edgeFacing * shineDir);
+            float edgeMask = 1.0 - smoothstep(0.0, strokeWidth, abs(d)); // The Rim
+            
+            // Shine Intensity
+            float distToLight = length(lightDelta);
+            float lightProx = smoothstep(1.5, 0.0, distToLight);
+            
+            // --- REFRACTION & MATERIAL ---
+            vec3 finalColor = getBackground(uv);
+            
+            if (d < 0.0) {
+                // Inside Glass
+                // 1. Refraction
+                float ior = 0.8; // High IOR for "Liquid Glass"
+                // Refract vector
+                vec2 refractOff = normal2D * ior * smoothstep(0.0, -0.2, d);
+                
+                // Chromatic Aberration sampling
+                float chroma = 0.015;
+                vec3 bgR = getBackground(uv + refractOff * (1.0 + chroma));
+                vec3 bgG = getBackground(uv + refractOff);
+                vec3 bgB = getBackground(uv + refractOff * (1.0 - chroma));
+                vec3 glassy = vec3(bgR.r, bgG.g, bgB.b);
+                
+                // 2. Internal Glow/Frost
+                // Scatters light inside
+                glassy += vec3(0.05, 0.1, 0.2) * 0.2; // Cool tint
+                
+                // 3. Surface Specular (Gloss)
+                vec3 viewDir = vec3(0.0, 0.0, 1.0);
+                vec3 halfVec = normalize(lightDir + viewDir);
+                float spec = pow(max(dot(normal, halfVec), 0.0), 60.0);
+                glassy += spec * 0.6 * lightProx;
+                
+                finalColor = glassy;
+            }
+            
+            // --- COMPOSITE EDGE SHINE ---
+            // "Optical reactor that isn't equally shiny around the outside"
+            vec3 shineColor = mix(vec3(1.0), vec3(0.6, 0.9, 1.0), shineDir);
+            finalColor += edgeMask * shineColor * lightProx * 2.5; // Bright rim
+            
+            // Visual slider fill indication (internal glow)
+            // Just for the slider area
+            if (uv.y < -0.28 && uv.y > -0.52 && d < 0.0) {
+                float fillMask = smoothstep(0.0, -0.05, uv.x - (-0.53 + uSliderValue * 1.06));
+                // Invert mask to show filled part
+                if (uv.x < -0.53 + uSliderValue * 1.06) {
+                     finalColor += vec3(0.2, 0.6, 1.0) * 0.15; // Blue tint fill
+                }
+            }
+
+            // Dithering/Grain
+            finalColor += (hash(uv * uTime) - 0.5) * 0.02;
+
+            gl_FragColor = vec4(finalColor, 1.0);
+        }
+    </script>
+
+    <script>
+        // --- WEBGL SETUP ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        document.body.appendChild(renderer.domElement);
+
+        const uniforms = {
+            uTime: { value: 0 },
+            uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+            uMouse: { value: new THREE.Vector2(0, 0) },
+            uSliderValue: { value: 0.5 },
+            uPress: { value: 0.0 }
+        };
+
+        const material = new THREE.ShaderMaterial({
+            vertexShader: document.getElementById('vertexShader').textContent,
+            fragmentShader: document.getElementById('fragmentShader').textContent,
+            uniforms: uniforms
+        });
+
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+        scene.add(mesh);
+
+        // --- INTERACTION LOGIC ---
+        let isDragging = false;
+
+        // Track mouse/touch
+        function updateMouse(x, y) {
+            uniforms.uMouse.value.x = x;
+            uniforms.uMouse.value.y = window.innerHeight - y;
+
+            // Slider Logic (Simple X-axis map)
+            if (isDragging) {
+                const ndcX = (x / window.innerWidth) * 2 - 1;
+                // Aspect ratio fix
+                const aspect = window.innerWidth / window.innerHeight;
+                const uvX = ndcX * aspect;
+
+                // Map UV X to slider range approx (-0.6 to 0.6)
+                // Slider track is roughly -0.65 to 0.65 width
+                let val = (uvX + 0.65) / 1.3;
+                val = Math.max(0.0, Math.min(1.0, val));
+                uniforms.uSliderValue.value = val;
+            }
+        }
+
+        window.addEventListener('mousemove', e => updateMouse(e.clientX, e.clientY));
+        window.addEventListener('mousedown', () => {
+            isDragging = true;
+            uniforms.uPress.value = 1.0;
+        });
+        window.addEventListener('mouseup', () => {
+            isDragging = false;
+            uniforms.uPress.value = 0.0;
+        });
+
+        // Touch support
+        window.addEventListener('touchmove', e => {
+            if (e.touches.length > 0) updateMouse(e.touches[0].clientX, e.touches[0].clientY);
+        }, { passive: false });
+        window.addEventListener('touchstart', e => {
+            isDragging = true;
+            uniforms.uPress.value = 1.0;
+            if (e.touches.length > 0) updateMouse(e.touches[0].clientX, e.touches[0].clientY);
+        }, { passive: false });
+        window.addEventListener('touchend', () => {
+            isDragging = false;
+            uniforms.uPress.value = 0.0;
+        });
+
+        window.addEventListener('resize', () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
+        });
+
+        // Loop
+        const startTime = Date.now();
+        function animate() {
+            requestAnimationFrame(animate);
+            uniforms.uTime.value = (Date.now() - startTime) * 0.001;
+
+            // Smooth release of press
+            if (!isDragging) {
+                uniforms.uPress.value += (0.0 - uniforms.uPress.value) * 0.1;
+            }
+
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+
+</html>
