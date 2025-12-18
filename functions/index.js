@@ -55,45 +55,57 @@ function extractSheetData(xlsxData) {
  * Build the AI prompt for quote sheet analysis
  */
 function buildAnalysisPrompt(sheetData) {
-  const previewRows = sheetData.data.slice(0, 20); // More context for better analysis
+  const previewRows = sheetData.data.slice(0, 25); // More context for better analysis
   const tableStr = previewRows.map((row, i) =>
     `Row ${i}: ${row.map(c => `"${c}"`).join(" | ")}`
   ).join("\n");
 
-  // Simplified AI prompt for reliable JSON output
-  return `Analyze this supplier spreadsheet and map the columns to extract product data.
+  // Enhanced AI prompt with intelligent pattern recognition
+  return `You are an expert data analyst specializing in supplier spreadsheet analysis. Analyze this spreadsheet and intelligently map columns to extract product data.
 
-DATA (first 20 rows):
+SPREADSHEET DATA (first 25 rows):
 ${tableStr}
 
-Map these fields by examining column headers and data patterns:
-- sku: Item codes (look for PSP/COMP/CC prefixes)
-- title: Product names/descriptions
-- price: Unit prices (FOB/EXW preferred)
-- cartonLength/Width/Height: Shipping dimensions
-- pack: Quantity per carton (look for PC/PCS)
-- grossWeight: Weight in kg
-- supplierCBM: Volume in m³
+INTELLIGENT ANALYSIS INSTRUCTIONS:
+1. **Header Detection**: Identify the header row by looking for descriptive text rather than data values
+2. **Pattern Recognition**: Look beyond keywords - analyze data patterns, formats, and context
+3. **SKU Detection**: Find product codes (may be alphanumeric, have prefixes like PSP/COMP/CC, or be simple numbers)
+4. **Title/Description**: Look for longer text fields describing products (may be in multiple languages)
+5. **Price Analysis**: Identify monetary values (may have currency symbols, decimals, or be in different currencies)
+6. **Dimension Intelligence**: 
+   - Look for measurements in cm, mm, inches
+   - May be combined (e.g., "25x20x15") or separate columns
+   - Could be labeled as "size", "dimensions", "L×W×H", "carton size", etc.
+7. **Pack Quantity**: Numbers followed by "PC", "PCS", "SET", "PACK" or standalone quantities
+8. **Weight**: Values with "kg", "g", "lb" or in weight-appropriate ranges
+9. **Volume**: CBM, m³, cubic measurements
+
+SMART MAPPING RULES:
+- If dimensions are combined in one cell (e.g., "25x20x15"), map all three dimension fields to that column
+- If you find product descriptions, always map to title field
+- Prioritize carton dimensions over product dimensions for shipping
+- Look for data consistency patterns across rows
+- Consider column position context (SKUs often first, prices often early, dimensions grouped)
 
 Return ONLY this JSON format (no extra text):
 {
-  "headerRow": 0,
+  "headerRow": [detected_header_row_index],
   "mapping": {
-    "sku": {"col": 0, "name": "ITEM CODE", "unit": null},
-    "title": {"col": 1, "name": "PRODUCT TITLE", "unit": null},
-    "price": {"col": 2, "name": "FOB PRICE USD", "unit": "USD"},
-    "productLength": {"col": null, "name": null, "unit": null},
-    "productWidth": {"col": null, "name": null, "unit": null},
-    "productHeight": {"col": null, "name": null, "unit": null},
-    "cartonLength": {"col": 3, "name": "CARTON SIZE CM", "unit": "cm"},
-    "cartonWidth": {"col": 3, "name": "CARTON SIZE CM", "unit": "cm"},
-    "cartonHeight": {"col": 3, "name": "CARTON SIZE CM", "unit": "cm"},
-    "dims_text": {"col": 3, "name": "CARTON SIZE CM", "unit": null},
-    "pack": {"col": 4, "name": "PACKING", "unit": "PC"},
-    "totalCartons": {"col": null, "name": null, "unit": null},
-    "grossWeight": {"col": 5, "name": "GROSS WEIGHT KG", "unit": "kg"},
-    "netWeight": {"col": null, "name": null, "unit": null},
-    "supplierCBM": {"col": 6, "name": "CBM", "unit": "m³"}
+    "sku": {"col": [column_index_or_null], "name": "[detected_header_name]", "unit": null},
+    "title": {"col": [column_index_or_null], "name": "[detected_header_name]", "unit": null},
+    "price": {"col": [column_index_or_null], "name": "[detected_header_name]", "unit": "[detected_currency]"},
+    "productLength": {"col": [column_index_or_null], "name": "[detected_header_name]", "unit": "[detected_unit]"},
+    "productWidth": {"col": [column_index_or_null], "name": "[detected_header_name]", "unit": "[detected_unit]"},
+    "productHeight": {"col": [column_index_or_null], "name": "[detected_header_name]", "unit": "[detected_unit]"},
+    "cartonLength": {"col": [column_index_or_null], "name": "[detected_header_name]", "unit": "[detected_unit]"},
+    "cartonWidth": {"col": [column_index_or_null], "name": "[detected_header_name]", "unit": "[detected_unit]"},
+    "cartonHeight": {"col": [column_index_or_null], "name": "[detected_header_name]", "unit": "[detected_unit]"},
+    "dims_text": {"col": [column_index_or_null], "name": "[detected_header_name]", "unit": null},
+    "pack": {"col": [column_index_or_null], "name": "[detected_header_name]", "unit": "[detected_unit]"},
+    "totalCartons": {"col": [column_index_or_null], "name": "[detected_header_name]", "unit": null},
+    "grossWeight": {"col": [column_index_or_null], "name": "[detected_header_name]", "unit": "[detected_unit]"},
+    "netWeight": {"col": [column_index_or_null], "name": "[detected_header_name]", "unit": "[detected_unit]"},
+    "supplierCBM": {"col": [column_index_or_null], "name": "[detected_header_name]", "unit": "[detected_unit]"}
   }
 }`;
 }
@@ -243,23 +255,85 @@ function extractProducts(sheetData, mapping, headerRow) {
       dims_text: ""
     };
 
-    // Extract SKU (safe null check)
+    // Extract SKU with intelligent fallback (safe null check)
     const skuCol = mapping?.sku?.col;
     if (skuCol != null) {
       product.sku = String(row[skuCol] || "").trim();
     }
+    
+    // INTELLIGENT SKU FALLBACK: If no SKU found, look for product codes
+    if (!product.sku && row && row.length > 0) {
+      for (let colIdx = 0; colIdx < row.length; colIdx++) {
+        const cellValue = String(row[colIdx] || "").trim();
+        // Look for SKU patterns: alphanumeric codes, prefixed codes, etc.
+        if (cellValue && (
+            /^[A-Z]{2,5}\d+/.test(cellValue) || // PSP001, COMP002, etc.
+            /^[A-Z0-9-]{4,15}$/.test(cellValue) || // General alphanumeric codes
+            /^\d{4,10}$/.test(cellValue) // Numeric codes
+          )) {
+          product.sku = cellValue;
+          console.log(`Intelligent SKU fallback for row ${i}: "${cellValue}"`);
+          break;
+        }
+      }
+    }
 
-    // Extract title (safe null check)
+    // Extract title with intelligent fallback (safe null check)
     const titleCol = mapping?.title?.col;
     if (titleCol != null) {
       product.title = String(row[titleCol] || "").trim();
     }
+    
+    // INTELLIGENT TITLE FALLBACK: If no title found, look for longest text field
+    if (!product.title && row && row.length > 0) {
+      let longestText = "";
+      let longestLength = 0;
+      
+      for (let colIdx = 0; colIdx < row.length; colIdx++) {
+        const cellValue = String(row[colIdx] || "").trim();
+        // Skip if it's clearly not a title (numbers, short codes, dimensions)
+        if (cellValue.length > longestLength && 
+            cellValue.length > 10 && // Must be reasonably long
+            !/^\d+(\.\d+)?$/.test(cellValue) && // Not just a number
+            !/^\d+x\d+x\d+/.test(cellValue) && // Not dimensions
+            !/^[A-Z]{2,5}\d+$/.test(cellValue) && // Not a simple SKU pattern
+            !cellValue.match(/^\d+\s*(PC|PCS|SET|KG|G|CM|MM)$/i)) { // Not quantity/measurement
+          longestText = cellValue;
+          longestLength = cellValue.length;
+        }
+      }
+      
+      if (longestText) {
+        product.title = longestText;
+        console.log(`Intelligent title fallback for row ${i}: "${longestText}"`);
+      }
+    }
 
-    // Extract price (safe null check)
+    // Extract price with intelligent fallback (safe null check)
     const priceCol = mapping?.price?.col;
     if (priceCol != null) {
       const priceStr = String(row[priceCol] || "");
       product.unitPrice = parseFloat(priceStr.replace(/[^0-9.-]/g, "")) || 0;
+    }
+    
+    // INTELLIGENT PRICE FALLBACK: If no price found, look for monetary values
+    if (product.unitPrice === 0 && row && row.length > 0) {
+      for (let colIdx = 0; colIdx < row.length; colIdx++) {
+        const cellValue = String(row[colIdx] || "").trim();
+        // Look for price patterns: numbers with currency symbols, decimal prices
+        if (cellValue && (
+            /^\$?\d+(\.\d{1,2})?$/.test(cellValue) || // $12.50 or 12.50
+            /^\d+[.,]\d{2}$/.test(cellValue) || // 12,50 or 12.50
+            /^USD?\s*\d+(\.\d{1,2})?/.test(cellValue) // USD 12.50
+          )) {
+          const price = parseFloat(cellValue.replace(/[^0-9.-]/g, ""));
+          if (price > 0 && price < 10000) { // Reasonable price range
+            product.unitPrice = price;
+            console.log(`Intelligent price fallback for row ${i}: ${price}`);
+            break;
+          }
+        }
+      }
     }
 
     // Extract PRODUCT dimensions (reference) - safe null checks
