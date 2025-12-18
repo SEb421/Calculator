@@ -1020,38 +1020,53 @@
                 }
             }, [product.unitPrice, currencyConversion?.enabled, currencyConversion?.targetCurrency]);
             
+            // Safe null checks for all product properties
+            const imageUrl = product.imageUrl || product.image || null;
+            const sku = product.sku || '';
+            const title = product.title || '';
+            const unitPrice = product.unitPrice || 0;
+            const cartonL = product.cartonLength || 0;
+            const cartonW = product.cartonWidth || 0;
+            const cartonH = product.cartonHeight || 0;
+            const productL = product.productLength || 0;
+            const productW = product.productWidth || 0;
+            const productH = product.productHeight || 0;
+            const pack = product.pack || 1;
+            const weight = product.grossWeight || 0;
+            const cbm = product.supplierCBM || 0;
+            
             return (
                 <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                     <td className="px-3 py-2 text-gray-400">{index + 1}</td>
                     <td className="px-3 py-2">
                         <div className="flex items-center gap-2">
-                            {product.imageUrl && (
-                                <img src={product.imageUrl} alt="Product" className="w-8 h-8 rounded object-cover" />
+                            {imageUrl && (
+                                <img src={imageUrl} alt="Product" className="w-8 h-8 rounded object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
                             )}
-                            <span className="font-medium text-gray-900 dark:text-white truncate max-w-[120px]" title={product.sku}>{product.sku || '—'}</span>
+                            <span className="font-medium text-gray-900 dark:text-white truncate max-w-[120px]" title={sku}>{sku || '—'}</span>
                         </div>
                     </td>
-                    <td className="px-3 py-2 text-gray-700 dark:text-gray-300 truncate max-w-[200px]" title={product.title}>
-                        <div className="font-medium">{product.title || '—'}</div>
-                        {product.title && product.title !== '—' && (
-                            <div className="text-xs text-gray-500 truncate">{product.title.substring(0, 50)}{product.title.length > 50 ? '...' : ''}</div>
+                    <td className="px-3 py-2 text-gray-700 dark:text-gray-300 max-w-[200px]" title={title}>
+                        <div className="font-medium truncate">{title || '—'}</div>
+                        {title && title !== '—' && title.length > 30 && (
+                            <div className="text-xs text-gray-500 truncate">{title.substring(0, 30)}...</div>
                         )}
                     </td>
-                    <td className="px-3 py-2 font-bold text-indigo-600 dark:text-indigo-400">${product.unitPrice?.toFixed(2) || '0.00'}</td>
+                    <td className="px-3 py-2 font-bold text-indigo-600 dark:text-indigo-400">${unitPrice.toFixed(2)}</td>
                     <td className="px-3 py-2 font-medium text-emerald-600 dark:text-emerald-400">
                         {currencyConversion?.enabled && gbpPrice ? `£${gbpPrice}` : '—'}
                     </td>
                     <td className="px-3 py-2 text-gray-500">
                         <div className="text-sm">
-                            {(product.cartonLength || product.productLength || 0)}×{(product.cartonWidth || product.productWidth || 0)}×{(product.cartonHeight || product.productHeight || 0)}
+                            {(cartonL || productL)}×{(cartonW || productW)}×{(cartonH || productH)}
                         </div>
                         <div className="text-xs text-gray-400">
-                            {product.cartonLength ? 'Carton' : product.productLength ? 'Product' : 'No dims'}
+                            {cartonL ? 'Carton' : productL ? 'Product' : 'No dims'}
                         </div>
                     </td>
-                    <td className="px-3 py-2 text-gray-500">{product.pack || 1}</td>
-                    <td className="px-3 py-2 text-gray-500">{product.grossWeight ? `${product.grossWeight}kg` : '—'}</td>
-                    <td className="px-3 py-2 text-gray-500">{product.supplierCBM ? `${product.supplierCBM}m³` : '—'}</td>
+                    <td className="px-3 py-2 text-gray-500">{pack}</td>
+                    <td className="px-3 py-2 text-gray-500">{weight ? `${weight}kg` : '—'}</td>
+                    <td className="px-3 py-2 text-gray-500">{cbm ? `${cbm}m³` : '—'}</td>
                 </tr>
             );
         }
@@ -4206,7 +4221,7 @@
                                                                         'Pack': p.pack || 1,
                                                                         'Weight (kg)': p.grossWeight || 0,
                                                                         'CBM': p.supplierCBM || '',
-                                                                        'Image URL': p.imageUrl || '',
+                                                                        'Image URL': p.image || p.imageUrl || '',
                                                                         'Dims Text': p.dims_text || '',
                                                                         'Pack Text': p.pack_text || ''
                                                                     }));
