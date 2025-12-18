@@ -1,0 +1,33 @@
+<h3 className="font-bold text-lg mb-4">Courier / Shipping Parameters</h3>
+<div className="space-y-4">
+    {courierRules.map((r, i) => (
+        <details key={r.id} className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+            <summary className="cursor-pointer font-bold text-sm mb-3 flex items-center gap-2 hover:text-indigo-600 dark:hover:text-indigo-400 list-none">
+                {r.logo && <img src={r.logo} className="h-5 object-contain" />}
+                <span>{r.carrier || 'Unknown'} - {r.service || r.name}</span>
+            </summary>
+            <div className="space-y-3 mt-3">
+                <div className="pb-3 border-b border-gray-200 dark:border-gray-700">
+                    <h4 className="text-xs font-bold uppercase text-gray-500 dark:text-gray-400 mb-2">Weight & Pricing</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                        <div><label className="text-[10px] uppercase text-gray-500 dark:text-gray-400 font-semibold">Max Weight (kg)</label><input className="glass-input w-full px-2 py-1.5 text-xs rounded tabular-nums" type="number" value={r.maxWeight || ''} onChange={(e) => setCourierRules(prev => prev.map((pr, pi) => pi === i ? { ...pr, maxWeight: parseFloat(e.target.value) || 0 } : pr))} /></div>
+                        <div><label className="text-[10px] uppercase text-gray-500 dark:text-gray-400 font-semibold">1st Parcel (£)</label><input className="glass-input w-full px-2 py-1.5 text-xs rounded tabular-nums" type="number" step="0.01" value={r.price || ''} onChange={(e) => setCourierRules(prev => prev.map((pr, pi) => pi === i ? { ...pr, price: parseFloat(e.target.value) || 0 } : pr))} /></div>
+                        <div><label className="text-[10px] uppercase text-gray-500 dark:text-gray-400 font-semibold">Additional (£)</label><input className="glass-input w-full px-2 py-1.5 text-xs rounded tabular-nums" type="number" step="0.01" value={r.additionalPrice || r.price || ''} onChange={(e) => setCourierRules(prev => prev.map((pr, pi) => pi === i ? { ...pr, additionalPrice: parseFloat(e.target.value) || 0 } : pr))} /></div>
+                        <div><label className="text-[10px] uppercase text-gray-500 dark:text-gray-400 font-semibold">25kg+ Surcharge (£)</label><input className="glass-input w-full px-2 py-1.5 text-xs rounded tabular-nums" type="number" step="0.01" value={r.surcharge25kg || ''} onChange={(e) => setCourierRules(prev => prev.map((pr, pi) => pi === i ? { ...pr, surcharge25kg: parseFloat(e.target.value) || 0 } : pr))} /></div>
+                    </div>
+                </div>
+                <details className="cursor-pointer">
+                    <summary className="text-xs font-bold uppercase text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400">▶ Dimension Limits</summary>
+                    <div className="grid grid-cols-3 gap-2 mt-2">
+                        <div><label className="text-[10px] uppercase text-gray-500 dark:text-gray-400 font-semibold">Max Length (cm)</label><input className="glass-input w-full px-2 py-1.5 text-xs rounded tabular-nums" type="number" value={r.maxL || ''} onChange={(e) => setCourierRules(prev => prev.map((pr, pi) => pi === i ? { ...pr, maxL: parseFloat(e.target.value) || 0 } : pr))} /></div>
+                        <div><label className="text-[10px] uppercase text-gray-500 dark:text-gray-400 font-semibold">Max Width (cm)</label><input className="glass-input w-full px-2 py-1.5 text-xs rounded tabular-nums" type="number" value={r.maxW || ''} onChange={(e) => setCourierRules(prev => prev.map((pr, pi) => pi === i ? { ...pr, maxW: parseFloat(e.target.value) || 0 } : pr))} /></div>
+                        <div><label className="text-[10px] uppercase text-gray-500 dark:text-gray-400 font-semibold">Max Height (cm)</label><input className="glass-input w-full px-2 py-1.5 text-xs rounded tabular-nums" type="number" value={r.maxH || ''} onChange={(e) => setCourierRules(prev => prev.map((pr, pi) => pi === i ? { ...pr, maxH: parseFloat(e.target.value) || 0 } : pr))} /></div>
+                        <div><label className="text-[10px] uppercase text-gray-500 dark:text-gray-400 font-semibold">Max Girth (cm)</label><input className="glass-input w-full px-2 py-1.5 text-xs rounded tabular-nums" type="number" value={r.maxGirth || ''} onChange={(e) => setCourierRules(prev => prev.map((pr, pi) => pi === i ? { ...pr, maxGirth: parseFloat(e.target.value) || 0 } : pr))} /></div>
+                        <div><label className="text-[10px] uppercase text-gray-500 dark:text-gray-400 font-semibold">Max CBM (m³)</label><input className="glass-input w-full px-2 py-1.5 text-xs rounded tabular-nums" type="number" step="0.001" value={r.maxCBM || ''} onChange={(e) => setCourierRules(prev => prev.map((pr, pi) => pi === i ? { ...pr, maxCBM: parseFloat(e.target.value) || 0 } : pr))} /></div>
+                        <div><label className="text-[10px] uppercase text-gray-500 dark:text-gray-400 font-semibold">Vol Wt Divisor</label><input className="glass-input w-full px-2 py-1.5 text-xs rounded tabular-nums" type="number" value={r.volWeightDivisor || 5000} onChange={(e) => setCourierRules(prev => prev.map((pr, pi) => pi === i ? { ...pr, volWeightDivisor: parseFloat(e.target.value) || 5000 } : pr))} /></div>
+                    </div>
+                </details>
+            </div>
+        </details>
+    ))}
+</div>

@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+functions/node_modules/
+
+# Firebase
+.firebase/
+
+# Build outputs
+*.log
+
+# Backup files
+Backup/
+*.backup
+*.bak
+index_backup*.html
+backup_*.html
+
+# Python cache
+__pycache__/
+*.pyc
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+
+# Demo zip (large file)
+demo.zip

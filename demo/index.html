@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>iOS 26 Liquid Glass - Advanced Demo</title>
+
+    <!-- Dependencies -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            background: #000;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .fade-in {
+            opacity: 0;
+            animation: fadeIn 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards 0.3s;
+        }
+
+        @keyframes fadeIn {
+            to {
+                opacity: 1;
+            }
+        }
+
+        /* Control Panel */
+        .control-panel {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 16px;
+            padding: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 13px;
+            max-width: 280px;
+        }
+
+        .control-panel h3 {
+            margin-bottom: 12px;
+            font-weight: 600;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .control-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .control-row label {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .control-row input[type="range"] {
+            width: 120px;
+            accent-color: #007AFF;
+        }
+
+        .info-badge {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 12px;
+            padding: 12px 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 13px;
+        }
+
+        .info-badge h2 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .info-badge p {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="canvas-container"></div>
+
+    <script type="text/babel">
+        const { useEffect, useRef, useState, useCallback } = React;
+
+        /* ==========================================
+           ADVANCED GLSL SHADERS - iOS 26 LIQUID GLASS
+           ==========================================
+           
+           Key Techniques Implemented:
+           1. Chromatic Aberration (RGB channel splitting through refraction)
+           2. Fresnel Effect (angle-dependent reflection/refraction blend)
+           3. Dynamic Light Source (moving specular highlights)
+           4. Internal Caustics (light concentration patterns)
+           5. Rim Lighting with falloff
+           6. Soft shadows and ambient occlusion approximation
+        */
+
+        const vertexShader = `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = vec4(position, 1.0);
+            }
+        `;
+
+        const fragmentShader = `
+            precision highp float;
+            
+            uniform float uTime;
+            uniform vec2 uResolution;
+            uniform vec2 uMouse;
+            uniform float uIOR;           // Index of Refraction
+            uniform float uDispersion;    // Chromatic aberration strength
+            uniform float uFresnelPower;  // Fresnel falloff
+            uniform float uLightIntensity;
+            uniform float uGlassOpacity;
+            
+            varying vec2 vUv;
+
+            // --- NOISE & UTILITIES ---
+            
+            // Smooth noise for caustics
+            float hash(vec2 p) {
+                return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+            }
+            
+            float noise(vec2 p) {
+                vec2 i = floor(p);
+                vec2 f = fract(p);
+                f = f * f * (3.0 - 2.0 * f);
+                
+                float a = hash(i);
+                float b = hash(i + vec2(1.0, 0.0));
+                float c = hash(i + vec2(0.0, 1.0));
+                float d = hash(i + vec2(1.0, 1.0));
+                
+                return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+            }
+            
+            float fbm(vec2 p) {
+                float v = 0.0;
+                float a = 0.5;
+                for(int i = 0; i < 4; i++) {
+                    v += a * noise(p);
+                    p *= 2.0;
+                    a *= 0.5;
+                }
+                return v;
+            }
+            
+            vec3 saturate3(vec3 rgb, float adjustment) {
+                const vec3 W = vec3(0.2125, 0.7154, 0.0721);
+                vec3 intensity = vec3(dot(rgb, W));
+                return mix(intensity, rgb, adjustment);
+            }
+
+            // --- SDF PRIMITIVES ---
+
+            float smin(float a, float b, float k) {
+                float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+                return mix(b, a, h) - k * h * (1.0 - h);
+            }
+
+            float sdRoundedBox(vec3 p, vec3 b, float r) {
+                vec3 q = abs(p) - b;
+                return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - r;
+            }
+
+            float sdSphere(vec3 p, float s) {
+                return length(p) - s;
+            }
+            
+            float sdTorus(vec3 p, vec2 t) {
+                vec2 q = vec2(length(p.xz) - t.x, p.y);
+                return length(q) - t.y;
+            }
+            
+            float sdCapsule(vec3 p, vec3 a, vec3 b, float r) {
+                vec3 pa = p - a, ba = b - a;
+                float h = clamp(dot(pa,ba)/dot(ba,ba), 0.0, 1.0);
+                return length(pa - ba*h) - r;
+            }
+
+            // --- SCENE DEFINITION ---
+
+            float map(vec3 p) {
+                float aspect = uResolution.x / uResolution.y;
+                
+                // Animate subtle breathing
+                float breathe = sin(uTime * 0.5) * 0.02;
+                
+                // Mouse Interaction - Liquid blob follows cursor
+                vec2 mousePos = (uMouse - 0.5) * 2.0;
+                mousePos.x *= aspect;
+                mousePos.y *= -1.0; 
+                vec3 pMouse = p - vec3(mousePos.x * 1.5, mousePos.y * 1.5, 0.1);
+                float mouseBlob = sdSphere(pMouse, 0.35 + breathe);
+
+                // --- CALCULATOR LAYOUT ---
+
+                // 1. Display Pane (Top) - Premium rounded rectangle
+                vec3 pDisplay = p - vec3(0.0, 1.1, 0.0);
+                pDisplay.z += sin(uTime * 0.3) * 0.01; // Subtle z-axis float
+                float display = sdRoundedBox(pDisplay, vec3(1.5 + breathe, 0.45, 0.12), 0.15);
+
+                // 2. Keypad Grid (4x4)
+                float keys = 100.0;
+                float keySize = 0.28;
+                float keyDepth = 0.12;
+                float keyRadius = 0.12;
+                float keyGap = 0.7;
+                
+                // Generate 4x4 grid of keys
+                for(int row = 0; row < 4; row++) {
+                    for(int col = 0; col < 4; col++) {
+                        float x = -1.05 + float(col) * keyGap;
+                        float y = 0.3 - float(row) * keyGap;
+                        
+                        vec3 pKey = p - vec3(x, y, 0.0);
+                        // Subtle per-key animation based on position
+                        float keyAnim = sin(uTime * 1.5 + float(row + col) * 0.5) * 0.005;
+                        pKey.z += keyAnim;
+                        
+                        float key = sdRoundedBox(pKey, vec3(keySize, keySize, keyDepth), keyRadius);
+                        keys = smin(keys, key, 0.08);
+                    }
+                }
+
+                // Combine Scene with smooth blending
+                float scene = smin(display, keys, 0.12);
+                
+                // Liquid Morph with Cursor - Interactive!
+                float d = smin(scene, mouseBlob, 0.5); 
+                
+                return d;
+            }
+
+            // Normal calculation with central differences
+            vec3 calcNormal(vec3 p) {
+                const float eps = 0.0005;
+                vec2 h = vec2(eps, 0);
+                return normalize(vec3(
+                    map(p+h.xyy) - map(p-h.xyy),
+                    map(p+h.yxy) - map(p-h.yxy),
+                    map(p+h.yyx) - map(p-h.yyx)
+                ));
+            }
+            
+            // Soft shadow calculation
+            float softShadow(vec3 ro, vec3 rd, float tmin, float tmax, float k) {
+                float res = 1.0;
+                float t = tmin;
+                for(int i = 0; i < 24; i++) {
+                    float h = map(ro + rd * t);
+                    res = min(res, k * h / t);
+                    t += clamp(h, 0.02, 0.1);
+                    if(h < 0.001 || t > tmax) break;
+                }
+                return clamp(res, 0.0, 1.0);
+            }
+            
+            // Ambient occlusion
+            float calcAO(vec3 pos, vec3 nor) {
+                float occ = 0.0;
+                float sca = 1.0;
+                for(int i = 0; i < 5; i++) {
+                    float h = 0.01 + 0.12 * float(i) / 4.0;
+                    float d = map(pos + h * nor);
+                    occ += (h - d) * sca;
+                    sca *= 0.95;
+                }
+                return clamp(1.0 - 3.0 * occ, 0.0, 1.0);
+            }
+
+            // Dynamic environment with moving gradients
+            vec3 getEnvironmentColor(vec2 uv) {
+                // Soft gradient base - high-key Apple aesthetic
+                vec3 col = vec3(0.92, 0.93, 0.96);
+                
+                float t = uTime * 0.3;
+                
+                // Animated gradient orbs - simulates light sources
+                vec2 pos1 = vec2(0.25 + sin(t) * 0.25, 0.6 + cos(t * 0.7) * 0.2);
+                float d1 = length(uv - pos1);
+                col = mix(col, vec3(0.3, 0.6, 1.0), smoothstep(0.9, 0.0, d1) * 0.5);
+                
+                vec2 pos2 = vec2(0.75 - cos(t * 0.5) * 0.2, 0.35 + sin(t * 0.8) * 0.2);
+                float d2 = length(uv - pos2);
+                col = mix(col, vec3(1.0, 0.3, 0.6), smoothstep(0.85, 0.0, d2) * 0.4);
+                
+                vec2 pos3 = vec2(0.5 + sin(t * 0.4) * 0.3, 0.8 + cos(t * 0.6) * 0.1);
+                float d3 = length(uv - pos3);
+                col = mix(col, vec3(0.1, 0.9, 0.8), smoothstep(1.0, 0.0, d3) * 0.3);
+                
+                // Subtle noise texture
+                col += (fbm(uv * 8.0 + uTime * 0.1) - 0.5) * 0.03;
+                
+                return col;
+            }
+            
+            // Dynamic light position (orbiting spotlight)
+            vec3 getLightPosition() {
+                float t = uTime * 0.5;
+                return normalize(vec3(
+                    sin(t) * 0.7,
+                    0.8 + cos(t * 0.7) * 0.2,
+                    0.6 + sin(t * 0.5) * 0.3
+                ));
+            }
+
+            void main() {
+                vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution.xy) / uResolution.y;
+                vec2 screenUV = gl_FragCoord.xy / uResolution.xy;
+                
+                // Camera setup
+                vec3 ro = vec3(0.0, 0.0, 5.0);
+                vec3 rd = normalize(vec3(uv, -1.0));
+                
+                // Raymarching
+                float t = 0.0;
+                float dist = 0.0;
+                
+                for(int i = 0; i < 80; i++) {
+                    vec3 p = ro + t * rd;
+                    dist = map(p);
+                    if(dist < 0.0008 || t > 12.0) break;
+                    t += dist * 0.9; // Slightly aggressive stepping for performance
+                }
+                
+                // Background
+                vec3 finalColor = getEnvironmentColor(screenUV);
+                finalColor = saturate3(finalColor, 1.15);
+
+                if(dist < 0.0008) {
+                    vec3 p = ro + t * rd;
+                    vec3 normal = calcNormal(p);
+                    vec3 viewDir = -rd;
+                    
+                    // === FRESNEL EFFECT ===
+                    // More reflection at grazing angles, more refraction at direct angles
+                    float fresnel = pow(1.0 - max(dot(viewDir, normal), 0.0), uFresnelPower);
+                    
+                    // === CHROMATIC ABERRATION (RGB CHANNEL SPLIT) ===
+                    // Different IOR for each color channel - this is the key to liquid glass!
+                    float iorR = 1.0 / (uIOR - uDispersion);
+                    float iorG = 1.0 / uIOR;
+                    float iorB = 1.0 / (uIOR + uDispersion);
+                    
+                    vec3 refractR = refract(rd, normal, iorR);
+                    vec3 refractG = refract(rd, normal, iorG);
+                    vec3 refractB = refract(rd, normal, iorB);
+                    
+                    // Sample background with different offsets per channel
+                    float chromaStrength = 0.06;
+                    vec3 backdropR = getEnvironmentColor(screenUV + refractR.xy * chromaStrength);
+                    vec3 backdropG = getEnvironmentColor(screenUV + refractG.xy * chromaStrength);
+                    vec3 backdropB = getEnvironmentColor(screenUV + refractB.xy * chromaStrength);
+                    
+                    // Combine chromatic channels
+                    vec3 refractedColor = vec3(backdropR.r, backdropG.g, backdropB.b);
+                    refractedColor = saturate3(refractedColor, 1.6);
+                    
+                    // === REFLECTION ===
+                    vec3 reflectDir = reflect(rd, normal);
+                    vec3 reflectedEnv = getEnvironmentColor(screenUV + reflectDir.xy * 0.5);
+                    reflectedEnv = mix(reflectedEnv, vec3(1.0), 0.3); // Brighten reflections
+                    
+                    // Blend refraction and reflection based on Fresnel
+                    vec3 glassColor = mix(refractedColor, reflectedEnv, fresnel * 0.6);
+                    
+                    // === GLASS TINT / FILL ===
+                    glassColor = mix(glassColor, vec3(1.0), uGlassOpacity * 0.3);
+                    
+                    // === DYNAMIC SPECULAR HIGHLIGHTS ===
+                    vec3 lightDir = getLightPosition();
+                    vec3 halfVec = normalize(lightDir + viewDir);
+                    float spec = pow(max(dot(normal, halfVec), 0.0), 60.0);
+                    
+                    // Secondary specular from opposite side
+                    vec3 lightDir2 = normalize(vec3(-0.5, 0.5, 0.8));
+                    float spec2 = pow(max(dot(normal, normalize(lightDir2 + viewDir)), 0.0), 40.0);
+                    
+                    // === RIM LIGHTING ===
+                    float rim = 1.0 - max(dot(viewDir, normal), 0.0);
+                    rim = pow(rim, 3.5);
+                    
+                    // Directional rim (brighter on one edge like Apple does)
+                    float gradDir = dot(normal.xy, normalize(vec2(-0.7, 0.7)));
+                    float rimIntensity = smoothstep(-0.3, 1.0, gradDir) * 0.7;
+                    vec3 rimColor = vec3(1.0) * rim * rimIntensity;
+                    
+                    // === INTERNAL CAUSTICS / GLOW ===
+                    float causticNoise = fbm(normal.xy * 4.0 + uTime * 0.5);
+                    float internalGlow = smoothstep(0.0, 0.8, 1.0 + dot(rd, normal)) * 0.15;
+                    internalGlow += causticNoise * 0.05;
+                    
+                    // === AMBIENT OCCLUSION ===
+                    float ao = calcAO(p, normal);
+                    
+                    // === SOFT SHADOW (optional, subtle) ===
+                    float shadow = softShadow(p + normal * 0.01, lightDir, 0.02, 2.5, 8.0);
+                    shadow = 0.7 + 0.3 * shadow;
+                    
+                    // === FINAL COMPOSITE ===
+                    finalColor = glassColor * ao * shadow;
+                    finalColor += rimColor;
+                    finalColor += vec3(1.0) * spec * uLightIntensity * 0.8;
+                    finalColor += vec3(0.95, 0.98, 1.0) * spec2 * uLightIntensity * 0.4;
+                    finalColor += vec3(1.0) * internalGlow;
+                    
+                    // Subtle color shift at edges (chromatic rim)
+                    vec3 chromaRim = vec3(0.9, 0.95, 1.0) * (1.0 - fresnel) * 0.1;
+                    finalColor += chromaRim;
+                }
+                
+                // Vignette
+                float vignette = 1.0 - dot(screenUV - 0.5, screenUV - 0.5) * 0.3;
+                finalColor *= vignette;
+                
+                // Subtle film grain
+                float grain = (hash(screenUV * uTime) - 0.5) * 0.02;
+                finalColor += grain;
+                
+                // Tone mapping and gamma
+                finalColor = finalColor / (1.0 + finalColor);
+                finalColor = pow(finalColor, vec3(0.95));
+
+                gl_FragColor = vec4(finalColor, 1.0);
+            }
+        `;
+
+        function App() {
+            const mountRef = useRef(null);
+            const materialRef = useRef(null);
+
+            // Adjustable parameters
+            const [ior, setIor] = useState(1.45);
+            const [dispersion, setDispersion] = useState(0.05);
+            const [fresnelPower, setFresnelPower] = useState(4.0);
+            const [lightIntensity, setLightIntensity] = useState(1.0);
+            const [glassOpacity, setGlassOpacity] = useState(0.2);
+
+            useEffect(() => {
+                const scene = new THREE.Scene();
+                const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+                const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                mountRef.current.appendChild(renderer.domElement);
+
+                const material = new THREE.ShaderMaterial({
+                    vertexShader,
+                    fragmentShader,
+                    uniforms: {
+                        uTime: { value: 0 },
+                        uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+                        uMouse: { value: new THREE.Vector2(0.5, 0.5) },
+                        uIOR: { value: ior },
+                        uDispersion: { value: dispersion },
+                        uFresnelPower: { value: fresnelPower },
+                        uLightIntensity: { value: lightIntensity },
+                        uGlassOpacity: { value: glassOpacity }
+                    }
+                });
+
+                materialRef.current = material;
+
+                const geometry = new THREE.PlaneGeometry(2, 2);
+                const mesh = new THREE.Mesh(geometry, material);
+                scene.add(mesh);
+
+                let animationId;
+                const animate = (time) => {
+                    animationId = requestAnimationFrame(animate);
+                    material.uniforms.uTime.value = time * 0.001;
+                    renderer.render(scene, camera);
+                };
+                animate(0);
+
+                const handleResize = () => {
+                    renderer.setSize(window.innerWidth, window.innerHeight);
+                    material.uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
+                };
+
+                // Smooth mouse tracking
+                let targetMouse = { x: 0.5, y: 0.5 };
+                let currentMouse = { x: 0.5, y: 0.5 };
+
+                const handleMouseMove = (e) => {
+                    targetMouse.x = e.clientX / window.innerWidth;
+                    targetMouse.y = 1.0 - (e.clientY / window.innerHeight);
+                };
+
+                const handleTouchMove = (e) => {
+                    if (e.touches.length > 0) {
+                        targetMouse.x = e.touches[0].clientX / window.innerWidth;
+                        targetMouse.y = 1.0 - (e.touches[0].clientY / window.innerHeight);
+                    }
+                };
+
+                // Smooth interpolation for mouse
+                const updateMouse = () => {
+                    currentMouse.x += (targetMouse.x - currentMouse.x) * 0.08;
+                    currentMouse.y += (targetMouse.y - currentMouse.y) * 0.08;
+                    material.uniforms.uMouse.value.set(currentMouse.x, currentMouse.y);
+                    requestAnimationFrame(updateMouse);
+                };
+                updateMouse();
+
+                window.addEventListener('resize', handleResize);
+                window.addEventListener('mousemove', handleMouseMove);
+                window.addEventListener('touchmove', handleTouchMove);
+
+                return () => {
+                    window.removeEventListener('resize', handleResize);
+                    window.removeEventListener('mousemove', handleMouseMove);
+                    window.removeEventListener('touchmove', handleTouchMove);
+                    cancelAnimationFrame(animationId);
+                    if (mountRef.current) mountRef.current.removeChild(renderer.domElement);
+                    renderer.dispose();
+                };
+            }, []);
+
+            // Update shader uniforms when controls change
+            useEffect(() => {
+                if (materialRef.current) {
+                    materialRef.current.uniforms.uIOR.value = ior;
+                    materialRef.current.uniforms.uDispersion.value = dispersion;
+                    materialRef.current.uniforms.uFresnelPower.value = fresnelPower;
+                    materialRef.current.uniforms.uLightIntensity.value = lightIntensity;
+                    materialRef.current.uniforms.uGlassOpacity.value = glassOpacity;
+                }
+            }, [ior, dispersion, fresnelPower, lightIntensity, glassOpacity]);
+
+            return (
+                <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
+                    <div ref={mountRef} style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }} />
+
+                    {/* Info Badge */}
+                    <div className="info-badge fade-in">
+                        <h2>iOS 26 Liquid Glass</h2>
+                        <p>Move your cursor to interact</p>
+                    </div>
+
+                    {/* UI OVERLAY - Calculator Labels */}
+                    <div className="fade-in" style={{
+                        position: 'absolute',
+                        top: 0, left: 0, width: '100%', height: '100%',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                        pointerEvents: 'none', color: 'rgba(40,40,45,0.85)',
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
+                    }}>
+                        {/* Display Area */}
+                        <div style={{
+                            marginBottom: '70px',
+                            width: '320px',
+                            textAlign: 'right',
+                            fontSize: '52px',
+                            fontWeight: '300',
+                            paddingRight: '24px',
+                            letterSpacing: '-2px'
+                        }}>
+                            1,234.56
+                        </div>
+
+                        {/* Keypad Grid (4x4) */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '35px' }}>
+                            {/* Row 1 */}
+                            <div style={{ width: '85px', height: '85px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', fontWeight: 400, color: 'rgba(50,50,55,0.9)' }}>AC</div>
+                            <div style={{ width: '85px', height: '85px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', fontWeight: 400, color: 'rgba(50,50,55,0.9)' }}>±</div>
+                            <div style={{ width: '85px', height: '85px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', fontWeight: 400, color: 'rgba(50,50,55,0.9)' }}>%</div>
+                            <div style={{ width: '85px', height: '85px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', fontWeight: 600, color: '#ff9500' }}>÷</div>
+
+                            {/* Row 2 */}
+                            <div style={{ width: '85px', height: '85px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px', fontWeight: 400 }}>7</div>
+                            <div style={{ width: '85px', height: '85px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px', fontWeight: 400 }}>8</div>
+                            <div style={{ width: '85px', height: '85px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px', fontWeight: 400 }}>9</div>
+                            <div style={{ width: '85px', height: '85px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', fontWeight: 600, color: '#ff9500' }}>×</div>
+
+                            {/* Row 3 */}
+                            <div style={{ width: '85px', height: '85px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px', fontWeight: 400 }}>4</div>
+                            <div style={{ width: '85px', height: '85px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px', fontWeight: 400 }}>5</div>
+                            <div style={{ width: '85px', height: '85px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px', fontWeight: 400 }}>6</div>
+                            <div style={{ width: '85px', height: '85px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', fontWeight: 600, color: '#ff9500' }}>−</div>
+
+                            {/* Row 4 */}
+                            <div style={{ width: '85px', height: '85px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px', fontWeight: 400 }}>1</div>
+                            <div style={{ width: '85px', height: '85px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px', fontWeight: 400 }}>2</div>
+                            <div style={{ width: '85px', height: '85px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px', fontWeight: 400 }}>3</div>
+                            <div style={{ width: '85px', height: '85px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', fontWeight: 600, color: '#ff9500' }}>+</div>
+                        </div>
+                    </div>
+
+                    {/* Control Panel */}
+                    <div className="control-panel fade-in" style={{ animationDelay: '0.8s' }}>
+                        <h3>🔮 Glass Parameters</h3>
+
+                        <div className="control-row">
+                            <label>IOR (Refraction)</label>
+                            <input
+                                type="range"
+                                min="1.0"
+                                max="2.5"
+                                step="0.05"
+                                value={ior}
+                                onChange={(e) => setIor(parseFloat(e.target.value))}
+                            />
+                        </div>
+
+                        <div className="control-row">
+                            <label>Dispersion (Chroma)</label>
+                            <input
+                                type="range"
+                                min="0"
+                                max="0.2"
+                                step="0.01"
+                                value={dispersion}
+                                onChange={(e) => setDispersion(parseFloat(e.target.value))}
+                            />
+                        </div>
+
+                        <div className="control-row">
+                            <label>Fresnel Power</label>
+                            <input
+                                type="range"
+                                min="1"
+                                max="8"
+                                step="0.5"
+                                value={fresnelPower}
+                                onChange={(e) => setFresnelPower(parseFloat(e.target.value))}
+                            />
+                        </div>
+
+                        <div className="control-row">
+                            <label>Specular Light</label>
+                            <input
+                                type="range"
+                                min="0"
+                                max="2"
+                                step="0.1"
+                                value={lightIntensity}
+                                onChange={(e) => setLightIntensity(parseFloat(e.target.value))}
+                            />
+                        </div>
+
+                        <div className="control-row">
+                            <label>Glass Opacity</label>
+                            <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.05"
+                                value={glassOpacity}
+                                onChange={(e) => setGlassOpacity(parseFloat(e.target.value))}
+                            />
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('canvas-container'));
+        root.render(<App />);
+
+    </script>
+</body>
+
+</html>
