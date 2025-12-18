@@ -32,23 +32,20 @@ const RESPONSE_SCHEMA = {
       additionalProperties: false,
       required: MAPPING_FIELDS,
       properties: Object.fromEntries(
-        MAPPING_FIELDS.map((k) => [k, { "$ref": "#/definitions/FieldMapping" }])
+        MAPPING_FIELDS.map((k) => [k, {
+          type: "OBJECT",
+          additionalProperties: false,
+          required: ["col", "name", "unit"],
+          properties: {
+            col: { type: "INTEGER", nullable: true },
+            name: { type: "STRING", nullable: true },
+            unit: { type: "STRING", nullable: true },
+          },
+        }])
       ),
     },
     confidence: { type: "NUMBER", nullable: true },
     notes: { type: "STRING", nullable: true },
-  },
-  definitions: {
-    FieldMapping: {
-      type: "OBJECT",
-      additionalProperties: false,
-      required: ["col", "name", "unit"],
-      properties: {
-        col: { type: "INTEGER", nullable: true },
-        name: { type: "STRING", nullable: true },
-        unit: { type: "STRING", nullable: true },
-      },
-    },
   },
 };
 
@@ -366,6 +363,11 @@ exports.analyzeQuoteSheetV2 = onRequest(
     memory: "2GiB"
   },
   async (req, res) => {
+    console.log("=== FUNCTION START ===");
+    console.log("Request method:", req.method);
+    console.log("Request headers:", JSON.stringify(req.headers, null, 2));
+    console.log("Request body keys:", Object.keys(req.body || {}));
+    
     // Native CORS handled via options above.
     try {
       const { rows, xlsxBase64, preview } = req.body;
@@ -411,7 +413,6 @@ exports.analyzeQuoteSheetV2 = onRequest(
         }],
         generationConfig: {
           responseMimeType: "application/json",
-          responseSchema: RESPONSE_SCHEMA,
           temperature: 0.2,
           topP: 0.8,
           maxOutputTokens: 2048
@@ -488,10 +489,16 @@ exports.analyzeQuoteSheetV2 = onRequest(
       });
 
     } catch (error) {
-      console.error("Error:", error);
+      console.error("=== FUNCTION ERROR ===");
+      console.error("Error message:", error.message);
+      console.error("Error stack:", error.stack);
+      console.error("Error name:", error.name);
+      console.error("=== END ERROR ===");
+      
       res.status(500).json({
         error: error.message,
-        details: error.stack
+        details: error.stack,
+        timestamp: new Date().toISOString()
       });
     }
   }
