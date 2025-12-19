@@ -696,7 +696,7 @@ exports.analyzeQuoteSheetV2 = onRequest(
 
       const projectId = "landed-calculator";
       const location = "us-central1";
-      const modelId = "gemini-3-flash-preview";
+      const modelId = "gemini-2.5-flash";
       const apiEndpoint = `https://${location}-aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/${location}/publishers/google/models/${modelId}:generateContent`;
 
       const requestBody = {
